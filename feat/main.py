@@ -46,7 +46,7 @@ def days_pairwise():
     for (i, j) in tqdm(itertools.combinations(days_cols.keys(), 2)):
         name = f'days_{i}_minus_{j}'
         new_train[name] = train[days_cols[i]] - train[days_cols[j]]
-        new_test[name] = train[days_cols[i]] - train[days_cols[j]]
+        new_test[name] = test[days_cols[i]] - test[days_cols[j]]
     
     filename = 'main_days_pairwise'
     new_train.to_feather(WORKING / f'{filename}_train.ftr')
