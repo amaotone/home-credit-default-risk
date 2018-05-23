@@ -1,8 +1,14 @@
 import time
-from datetime import datetime
+from pathlib import Path
 
-import pandas as pd
+PROJECT_PATH = Path(__file__).parent
+INPUT = PROJECT_PATH / 'input'
+OUTPUT = PROJECT_PATH / 'output'
+WORKING = PROJECT_PATH / 'working'
+
+
 def generate_submit(p, name):
+    import pandas as pd
     print('load sample submit')
     sub = pd.read_feather('../data/input/sample_submission.ftr')
     sub.TARGET = p

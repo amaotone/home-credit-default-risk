@@ -1,5 +1,7 @@
 .idea
-data
+input
+output
+working
 
 ### https://raw.github.com/github/gitignore/f9a44f6c36d9fdd66a1aa9610f1331fdabf5e32c/python.gitignore
 
@@ -118,7 +120,8 @@ venv.bak/
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
