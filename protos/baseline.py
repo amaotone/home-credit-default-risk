@@ -1,5 +1,4 @@
 import time
-from pathlib import Path
 
 import lightgbm as lgb
 import matplotlib.pyplot as plt
@@ -9,10 +8,8 @@ from sklearn.model_selection import GridSearchCV, StratifiedKFold
 
 SEED = 77
 
-files = Path('.').glob('../data/input/application_*.ftr')
-for f in files:
-    print(f)
-    globals()[f.stem] = pd.read_feather(f)
+application_train = pd.read_feather('../data/input/application_train.ftr')
+application_test = pd.read_feather('../data/input/application_test.ftr')
 
 train = application_train
 test = application_test
@@ -65,5 +62,6 @@ feat_df = pd.DataFrame({'importance': model.best_estimator_.feature_importances_
     'importance', ascending=False)
 feat_df[:30].plot.bar(figsize=(20, 5))
 
-sample_submission.TARGET = pred
-sample_submission.to_csv(f"{time.strftime('%y%m%d_%H%M%S')}_submission.csv.gz", index=None, compression='gzip')
+sub = pd.read_feather('../data/input/sample_submission.ftr')
+sub.TARGET = pred
+sub.to_csv(f"{time.strftime('%y%m%d_%H%M%S')}_submission.csv.gz", index=None, compression='gzip')
