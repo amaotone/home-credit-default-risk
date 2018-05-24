@@ -2,15 +2,31 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+from tqdm import tqdm
+
 PROJECT_PATH = Path(__file__).parent
 INPUT = PROJECT_PATH / 'input'
 OUTPUT = PROJECT_PATH / 'output'
 WORKING = PROJECT_PATH / 'working'
 
 
-def stacking(X, cols, cv_id):
+def target_encoding(X_train, y_train, X_test, cols, cv_id):
     from sklearn.model_selection import PredefinedSplit
+    from category_encoders import TargetEncoder
+    print(cols)
+    cols = list(cols)
+    train_new = X_train.copy()
+    test_new = X_test.copy()
+    test_new[:] = 0
     cv = PredefinedSplit(cv_id)
+    X_train.index = X_train.index.astype(int)
+    for trn_idx, val_idx in tqdm(cv.split(X_train)):
+        enc = TargetEncoder(cols=cols)
+        enc.fit(X_train.iloc[trn_idx], y_train[trn_idx])
+        train_new.iloc[val_idx] = enc.transform(X_train.iloc[val_idx])
+        test_new += enc.transform(X_test)
+    test_new /= cv.get_n_splits()
+    return train_new[cols], test_new[cols]
 
 
 @contextmanager

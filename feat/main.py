@@ -76,7 +76,7 @@ if __name__ == '__main__':
                  'publish': 'DAYS_ID_PUBLISH', 'phone': 'DAYS_LAST_PHONE_CHANGE'}
     income_cols = {'total': 'AMT_INCOME_TOTAL', 'credit': 'AMT_CREDIT', 'annuity': 'AMT_ANNUITY',
                    'goods': 'AMT_GOODS_PRICE'}
-    
+
     preprocessing()
     days_to_years()
     days_pairwise()
