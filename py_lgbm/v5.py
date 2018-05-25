@@ -32,7 +32,7 @@ cv = PredefinedSplit(cv_id)
 
 lgb_params = {
     'n_estimators': 4000,
-    'learning_rate': 0.05,
+    'learning_rate': 0.01,
     'num_leaves': 31,
     'colsample_bytree': 0.8,
     'subsample': 0.9,
@@ -54,24 +54,21 @@ for i, (trn_idx, val_idx) in enumerate(cv.split(X_train, y_train)):
     X_val = X_train.iloc[val_idx]
     y_val = y_train[val_idx]
     
-    print(f'[fold {i}] fit')
+    print('='*30, f'FOLD {i+1}', '='*30)
     model = lgb.LGBMClassifier(**lgb_params)
     model.fit(X_trn, y_trn, eval_set=[(X_trn, y_trn), (X_val, y_val)], eval_metric='auc',
               early_stopping_rounds=100, verbose=100)
     
     cv_score = roc_auc_score(y_val, model.predict_proba(X_val)[:, 1])
     cv_results.append(cv_score)
-    
-    print(f'[fold {i}] predict')
     pred_df[i] = model.predict_proba(X_test)[:, 1]
-    
     feat_df[i] = model.feature_importances_
 
 valid_score = np.mean(cv_results)
 
-print('=' * 50)
+print('=' * 60)
 print(f'val = {valid_score};\nfeats = {feats};\nlgb_params = {lgb_params}')
-print('=' * 50)
+print('=' * 60)
 
 pred = pred_df.mean(axis=1).values.ravel()
 generate_submit(pred, f'{NAME}_{valid_score:.4f}')
