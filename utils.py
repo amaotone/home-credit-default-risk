@@ -30,6 +30,17 @@ def target_encoding(X_train, y_train, X_test, cols, cv_id):
     return train_new, test_new
 
 
+def load_dataset(names):
+    dfs = [pd.read_feather(WORKING / f'{f}_train.ftr') for f in names]
+    X_train = pd.concat(dfs, axis=1)
+    y_train = pd.read_feather(WORKING / 'y_train.ftr').TARGET
+    dfs = [pd.read_feather(WORKING / f'{f}_test.ftr') for f in names]
+    X_test = pd.concat(dfs, axis=1)
+    cv_id = pd.read_feather(INPUT / 'cv_id.ftr').cv_id
+    cv = PredefinedSplit(cv_id)
+    return X_train, y_train, X_test, cv
+
+
 @contextmanager
 def timer(name):
     t0 = time.time()
