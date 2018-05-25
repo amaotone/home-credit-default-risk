@@ -1,13 +1,9 @@
 import time
 from contextlib import contextmanager
-from pathlib import Path
 
 from tqdm import tqdm
 
-PROJECT_PATH = Path(__file__).parent
-INPUT = PROJECT_PATH / 'input'
-OUTPUT = PROJECT_PATH / 'output'
-WORKING = PROJECT_PATH / 'working'
+from config import *
 
 
 def target_encoding(X_train, y_train, X_test, cols, cv_id):

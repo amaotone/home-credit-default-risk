@@ -2,6 +2,7 @@ import os
 import sys
 
 import lightgbm as lgb
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -54,7 +55,7 @@ for i, (trn_idx, val_idx) in enumerate(cv.split(X_train, y_train)):
     X_val = X_train.iloc[val_idx]
     y_val = y_train[val_idx]
     
-    print('='*30, f'FOLD {i+1}', '='*30)
+    print('=' * 30, f'FOLD {i+1}', '=' * 30)
     model = lgb.LGBMClassifier(**lgb_params)
     model.fit(X_trn, y_trn, eval_set=[(X_trn, y_trn), (X_val, y_val)], eval_metric='auc',
               early_stopping_rounds=100, verbose=100)
@@ -75,6 +76,6 @@ generate_submit(pred, f'{NAME}_{valid_score:.4f}')
 
 print('output feature importances')
 feat_df.to_csv(f'{NAME}_feat.csv')
-# feat_df = pd.DataFrame({'importance': model.feature_importances_}, index=X_train.columns).sort_values('importance')
-# feat_df[-50:].plot.barh(figsize=(20, 15))
-# plt.savefig(str(Path().home() / f'Dropbox/kaggle/{NAME}_feats.pdf'))
+imp = feat_df.mean(axis=1).sort_values(ascending=False)[:50]
+imp.plot.barh(figsize=(12, 12))
+plt.savefig(str(DROPBOX / f'{NAME}_feature_importances.pdf'))
