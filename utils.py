@@ -1,14 +1,15 @@
 import time
 from contextlib import contextmanager
 
+import pandas as pd
+from category_encoders import TargetEncoder
+from sklearn.model_selection import PredefinedSplit
 from tqdm import tqdm
 
 from config import *
 
 
 def target_encoding(X_train, y_train, X_test, cols, cv_id):
-    from sklearn.model_selection import PredefinedSplit
-    from category_encoders import TargetEncoder
     cols = list(cols)
     train_new = X_train.copy()
     test_new = X_test.copy()
@@ -38,7 +39,6 @@ def timer(name):
 
 
 def generate_submit(p, name):
-    import pandas as pd
     print('load sample submit')
     sub = pd.read_feather(INPUT / 'sample_submission.ftr')
     sub.TARGET = p

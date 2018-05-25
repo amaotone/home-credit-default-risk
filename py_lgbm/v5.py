@@ -10,7 +10,8 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import PredefinedSplit
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import *
+from utils import generate_submit
+from config import *
 
 sns.set_style('darkgrid')
 
