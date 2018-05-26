@@ -11,6 +11,8 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import *
 
+PREFIX = 'bureau_'
+
 print('load datasets')
 train = pd.read_feather(INPUT / 'application_train.ftr')
 test = pd.read_feather(INPUT / 'application_test.ftr')
@@ -26,6 +28,7 @@ buro_bal.columns = 'status_' + buro_bal.columns + '_cnt'
 buro_bal['months_cnt'] = bureau_balance.groupby('SK_ID_BUREAU').MONTHS_BALANCE.size()
 buro_bal['months_max'] = bureau_balance.groupby('SK_ID_BUREAU').MONTHS_BALANCE.max()
 buro_bal['months_min'] = bureau_balance.groupby('SK_ID_BUREAU').MONTHS_BALANCE.min()
+buro_bal['latest_status'] = bureau_balance.groupby('SK_ID_BUREAU').STATUS.head(1)
 
 for f in tqdm(buro_bal.filter(regex='status_').columns):
     buro_bal[f.replace('_cnt', '_ratio')] = buro_bal[f] / buro_bal.months_cnt
@@ -43,13 +46,13 @@ for f in tqdm(buro_cat):
     buro.drop(f, axis=1, inplace=True)
 
 avg_buro = buro.groupby('SK_ID_CURR').mean().drop('SK_ID_BUREAU', axis=1)
-avg_buro.columns = 'bureau_' + avg_buro.columns
+avg_buro.columns = PREFIX + avg_buro.columns
 
 print('add count and null feature')
-avg_buro['bureau_cnt'] = buro.groupby('SK_ID_CURR').SK_ID_BUREAU.count()
-avg_buro['bureau_null_cnt'] = avg_buro.isnull().sum(axis=1)
+avg_buro[f'{PREFIX}cnt'] = buro.groupby('SK_ID_CURR').SK_ID_BUREAU.count()
+avg_buro[f'{PREFIX}null_cnt'] = avg_buro.isnull().sum(axis=1)
 
 train.merge(avg_buro, left_on='SK_ID_CURR', right_index=True, how='left') \
-    .filter(regex='bureau_').to_feather(WORKING / 'bureau_train.ftr')
+    .filter(regex=PREFIX).to_feather(WORKING / f'{PREFIX}train.ftr')
 test.merge(avg_buro, left_on='SK_ID_CURR', right_index=True, how='left') \
-    .filter(regex='bureau_').to_feather(WORKING / 'bureau_test.ftr')
+    .filter(regex=PREFIX).to_feather(WORKING / f'{PREFIX}test.ftr')

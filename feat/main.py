@@ -3,8 +3,6 @@ import os
 import sys
 
 import numpy as np
-import pandas as pd
-from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import *
@@ -68,6 +66,30 @@ def money_pairwise():
     return new_train, new_test
 
 
+@timer('ext_source_pairwise')
+def ext_source_pairwise():
+    new_train, new_test = pd.DataFrame(), pd.DataFrame()
+    ext_cols = {'ext1': 'EXT_SOURCE_1', 'ext2': 'EXT_SOURCE_2', 'ext3': 'EXT_SOURCE_3'}
+    for i, j in tqdm(itertools.combinations(ext_cols.keys(), 2)):
+        new_train[f'{i}_plus_{j}'] = train[ext_cols[i]] + train[ext_cols[j]]
+        new_train[f'{i}_minus_{j}'] = train[ext_cols[i]] - train[ext_cols[j]]
+        new_train[f'{i}_times_{j}'] = train[ext_cols[i]] * train[ext_cols[j]]
+        new_train[f'{i}_div_{j}'] = train[ext_cols[i]] / (train[ext_cols[j]] + 0.1)
+        new_test[f'{i}_plus_{j}'] = test[ext_cols[i]] + test[ext_cols[j]]
+        new_test[f'{i}_minus_{j}'] = test[ext_cols[i]] - test[ext_cols[j]]
+        new_test[f'{i}_times_{j}'] = test[ext_cols[i]] * test[ext_cols[j]]
+        new_test[f'{i}_div_{j}'] = test[ext_cols[i]] / (test[ext_cols[j]] + 0.1)
+    filename = 'main_ext_source_pairwise'
+    new_train.to_feather(WORKING / f'{filename}_train.ftr')
+    new_test.to_feather(WORKING / f'{filename}_test.ftr')
+    return new_train, new_test
+
+@timer('numeric')
+def numeric():
+    num_cols = [f for f in test.columns if test[f].dtype != 'object']
+    train[num_cols].drop('SK_ID_CURR', axis=1).to_feather(WORKING/f'main_numeric_train.ftr')
+    test[num_cols].drop('SK_ID_CURR', axis=1).to_feather(WORKING/f'main_numeric_test.ftr')
+
 if __name__ == '__main__':
     print('load dataset')
     train = pd.read_feather(INPUT / 'application_train.ftr')
@@ -76,8 +98,11 @@ if __name__ == '__main__':
                  'publish': 'DAYS_ID_PUBLISH', 'phone': 'DAYS_LAST_PHONE_CHANGE'}
     income_cols = {'total': 'AMT_INCOME_TOTAL', 'credit': 'AMT_CREDIT', 'annuity': 'AMT_ANNUITY',
                    'goods': 'AMT_GOODS_PRICE'}
-
+    
     preprocessing()
-    days_to_years()
-    days_pairwise()
-    money_pairwise()
+    numeric()
+    
+    # days_to_years()
+    # days_pairwise()
+    # money_pairwise()
+    # ext_source_pairwise()

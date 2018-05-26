@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold
 
-from utils import *
+from config import *
 
 train = pd.read_feather(INPUT / 'application_train.ftr')
 cv = KFold(5, shuffle=True, random_state=77)
