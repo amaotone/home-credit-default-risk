@@ -132,13 +132,14 @@ if __name__ == '__main__':
     # new = pd.concat([new, weekday_to_sin_cos()])
     new = pd.concat([new, category()], axis=1)
     new['sellerplace_mode'] = sellerplace_mode()
-    tmp = sellerplace_lda()
-    lda_mean = prev.merge(tmp, left_on='SELLERPLACE_AREA', right_index=True, how='left') \
-        .groupby('SK_ID_CURR')[tmp.columns].mean()
-    lda_mean.columns = tmp.columns + '_mean'
-    new = pd.concat([new, lda_mean], axis=1)
-    tmp.columns = tmp.columns + '_mode'
-    new = new.merge(tmp, left_on='sellerplace_mode', right_index=True, how='left')
+    
+    # tmp = sellerplace_lda()
+    # lda_mean = prev.merge(tmp, left_on='SELLERPLACE_AREA', right_index=True, how='left') \
+    #     .groupby('SK_ID_CURR')[tmp.columns].mean()
+    # lda_mean.columns = tmp.columns + '_mean'
+    # new = pd.concat([new, lda_mean], axis=1)
+    # tmp.columns = tmp.columns + '_mode'
+    # new = new.merge(tmp, left_on='sellerplace_mode', right_index=True, how='left')
     
     new.drop(new.filter(regex='SK_ID_PREV').columns, axis=1, inplace=True)
     new.columns = PREFIX + new.columns

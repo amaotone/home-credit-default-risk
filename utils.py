@@ -2,6 +2,7 @@ import time
 from contextlib import contextmanager
 
 import pandas as pd
+import requests
 from category_encoders import TargetEncoder
 from sklearn.model_selection import PredefinedSplit
 from tqdm import tqdm
@@ -39,6 +40,15 @@ def load_dataset(names):
     cv_id = pd.read_feather(INPUT / 'cv_id.ftr').cv_id
     cv = PredefinedSplit(cv_id)
     return X_train, y_train, X_test, cv
+
+
+def send_line_notification(message):
+    line_token = 'BAgnMPDq3jOv2OnMabEQmMlz3qI4glluFuXBaTSU37W'  # 終わったら無効化する
+    line_notify_api = 'https://notify-api.line.me/api/notify'
+    message = "\n{}".format(message)
+    payload = {'message': message}
+    headers = {'Authorization': 'Bearer {}'.format(line_token)}  # 発行したトークン
+    requests.post(line_notify_api, data=payload, headers=headers)
 
 
 @contextmanager
