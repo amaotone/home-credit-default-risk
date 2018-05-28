@@ -56,7 +56,7 @@ def category():
     cat_cols = [f for f in inst.columns if inst[f].dtype == 'object']
     le = LabelEncoder()
     for f in tqdm(cat_cols):
-        new[f + '_latest'] = le.fit_transform(inst.groupby('SK_ID_CURR')[f].head(1).astype(str))
+        new[f + '_latest'] = le.fit_transform(inst.groupby('SK_ID_CURR')[f].tail(1).astype(str))
         new[f + '_nunique'] = inst.groupby('SK_ID_CURR')[f].nunique()
         new[f + '_count'] = inst.groupby('SK_ID_CURR')[f].count()
 
@@ -74,6 +74,9 @@ if __name__ == '__main__':
     train = pd.read_feather(INPUT / 'application_train.ftr')
     test = pd.read_feather(INPUT / 'application_test.ftr')
     inst = pd.read_feather(INPUT / 'installments_payments.ftr')
+    
+    print('sort')
+    inst = inst.sort_values(['SK_ID_CURR', 'DAYS_INSTALMENT']).reset_index(drop=True)
     
     print('handle missing and binary')
     inst.loc[:, inst.columns.str.startswith('DAYS_')] = inst.filter(regex='^DAYS_').replace({365243: np.nan})
@@ -100,10 +103,10 @@ if __name__ == '__main__':
     print('calc features')
     new['null_cnt'] = null_count()
     new['count'] = count()
-    new = pd.concat([new, amount_pairwise()])
-    new = pd.concat([new, days_pairwise()])
+    new = pd.concat([new, amount_pairwise()], axis=1)
+    new = pd.concat([new, days_pairwise()], axis=1)
     # new = pd.concat([new, weekday_to_sin_cos()])
-    new = pd.concat([new, category()])
+    new = pd.concat([new, category()], axis=1)
     
     new.drop(new.filter(regex='SK_ID_PREV').columns, axis=1, inplace=True)
     

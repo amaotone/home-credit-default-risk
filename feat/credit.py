@@ -56,7 +56,7 @@ def category():
     cat_cols = [f for f in credit.columns if credit[f].dtype == 'object']
     le = LabelEncoder()
     for f in tqdm(cat_cols):
-        new[f + '_latest'] = le.fit_transform(credit.groupby('SK_ID_CURR')[f].head(1).astype(str))
+        new[f + '_latest'] = le.fit_transform(credit.groupby('SK_ID_CURR')[f].tail(1).astype(str))
         new[f + '_nunique'] = credit.groupby('SK_ID_CURR')[f].nunique()
         new[f + '_count'] = credit.groupby('SK_ID_CURR')[f].count()
 
@@ -74,6 +74,9 @@ if __name__ == '__main__':
     train = pd.read_feather(INPUT / 'application_train.ftr')
     test = pd.read_feather(INPUT / 'application_test.ftr')
     credit = pd.read_feather(INPUT / 'credit_card_balance.ftr')
+    
+    print('sort')
+    credit = credit.sort_values(['SK_ID_CURR', 'MONTHS_BALANCE']).reset_index(drop=True)
     
     print('np.log1p(AMT_|SK_DPD_*)')
     credit.loc[:, credit.columns.str.startswith('AMT_')] = np.log1p(credit.filter(regex='^AMT_'))
@@ -98,10 +101,10 @@ if __name__ == '__main__':
     print('calc features')
     new['null_cnt'] = null_count()
     new['count'] = count()
-    new = pd.concat([new, amount_pairwise()])
+    new = pd.concat([new, amount_pairwise()], axis=1)
     # new = pd.concat([new, days_pairwise()])
     # new = pd.concat([new, weekday_to_sin_cos()])
-    new = pd.concat([new, category()])
+    new = pd.concat([new, category()], axis=1)
     
     new.drop(new.filter(regex='SK_ID_PREV').columns, axis=1, inplace=True)
     

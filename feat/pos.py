@@ -56,7 +56,7 @@ def category():
     cat_cols = [f for f in pos.columns if pos[f].dtype == 'object']
     le = LabelEncoder()
     for f in tqdm(cat_cols):
-        new[f + '_latest'] = le.fit_transform(pos.groupby('SK_ID_CURR')[f].head(1).astype(str))
+        new[f + '_latest'] = le.fit_transform(pos.groupby('SK_ID_CURR')[f].tail(1).astype(str))
         new[f + '_nunique'] = pos.groupby('SK_ID_CURR')[f].nunique()
         new[f + '_count'] = pos.groupby('SK_ID_CURR')[f].count()
 
@@ -74,6 +74,9 @@ if __name__ == '__main__':
     train = pd.read_feather(INPUT / 'application_train.ftr')
     test = pd.read_feather(INPUT / 'application_test.ftr')
     pos = pd.read_feather(INPUT / 'POS_CASH_balance.ftr')
+    
+    print('sort')
+    pos = pos.sort_values(['SK_ID_CURR', 'MONTHS_BALANCE']).reset_index(drop=True)
     
     print('np.log1p(SK_DPD_*)')
     pos.loc[:, pos.columns.str.startswith('SK_DPD')] = np.log1p(pos.filter(regex='^SK_DPD'))
@@ -100,7 +103,7 @@ if __name__ == '__main__':
     # new = pd.concat([new, amount_pairwise()])
     # new = pd.concat([new, days_pairwise()])
     # new = pd.concat([new, weekday_to_sin_cos()])
-    new = pd.concat([new, category()])
+    new = pd.concat([new, category()], axis=1)
     
     new.drop(new.filter(regex='SK_ID_PREV').columns, axis=1, inplace=True)
     
