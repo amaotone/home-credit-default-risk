@@ -13,7 +13,6 @@ from utils import generate_submit, load_dataset, send_line_notification
 from category_encoders import TargetEncoder
 from config import *
 from utils import timer
-
 sns.set_style('darkgrid')
 
 NAME = Path(__file__).stem
@@ -21,14 +20,12 @@ print(NAME)
 
 with timer('load datasets'):
     feats = ['main_numeric', 'main_days_to_years', 'main_days_pairwise', 'main_money_pairwise', 'main_target_enc',
-             'main_ext_source_pairwise', 'bureau', 'prev', 'pos', 'credit', 'inst', 'pos_latest', 'pos_']
+             'main_ext_source_pairwise', 'bureau', 'prev', 'pos', 'credit', 'inst', 'pos_latest', 'credit_latest',
+             'inst_latest']
     X_train, y_train, X_test, cv = load_dataset(feats)
     print('train:', X_train.shape)
     print('test :', X_test.shape)
-    print('feats: ', X_train.columns.tolist())
-
-X_train.fillna(-9999, inplace=True)
-X_test.fillna(-9999, inplace=True)
+    # print('feats: ', X_train.columns.tolist())
 
 lgb_params = {
     'n_estimators': 4000,
@@ -66,6 +63,9 @@ with timer('training'):
             X_trn = te.fit_transform(X_trn, y_trn)
             X_val = te.transform(X_val)
             X_test_ = te.transform(X_test)
+            X_trn.fillna(-9999)
+            X_val.fillna(-9999)
+            X_test_.fillna(-9999)
         
         with timer('fit'):
             model = lgb.LGBMClassifier(**lgb_params)

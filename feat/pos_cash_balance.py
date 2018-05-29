@@ -1,4 +1,3 @@
-import argparse
 import os
 import sys
 
@@ -7,7 +6,7 @@ import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from feat import Feature
+from feat import Feature, get_arguments, generate_features
 from utils import timer
 from config import *
 
@@ -15,7 +14,7 @@ from config import *
 class PosLatest(Feature):
     @property
     def categorical_features(self):
-        return ['NAME_CONTRACT_STATUS']
+        return ['pos_NAME_CONTRACT_STATUS_latest']
     
     def create_features(self):
         df = pos.groupby('SK_ID_CURR').last().drop('SK_ID_PREV', axis=1)
@@ -32,10 +31,7 @@ class PosCount(Feature):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='POS CASH features')
-    parser.add_argument('--force', '-f', action='store_true', help='Overwrite existing files')
-    args = parser.parse_args()
-    
+    args = get_arguments('POS CASH')
     with timer('load dataset'):
         train = pd.read_feather(TRAIN)[['SK_ID_CURR']]
         test = pd.read_feather(TEST)[['SK_ID_CURR']]
@@ -46,9 +42,4 @@ if __name__ == '__main__':
         pos.loc[:, pos.columns.str.startswith('SK_DPD')] = np.log1p(pos.filter(regex='^SK_DPD'))
     
     with timer('create dataset'):
-        features = [PosLatest()]
-        for f in features:
-            if args.force or not Path(f.train_path).exists() or not Path(f.test_path).exists():
-                f.run().save()
-            else:
-                print(f.name, 'skipped')
+        generate_features([PosLatest()])
