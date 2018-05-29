@@ -13,6 +13,7 @@ from utils import generate_submit, load_dataset, send_line_notification
 from category_encoders import TargetEncoder
 from config import *
 from utils import timer
+
 sns.set_style('darkgrid')
 
 NAME = Path(__file__).stem
@@ -20,7 +21,8 @@ print(NAME)
 
 with timer('load datasets'):
     feats = ['main_numeric', 'main_days_to_years', 'main_days_pairwise', 'main_money_pairwise', 'main_target_enc',
-             'main_ext_source_pairwise', 'bureau', 'prev', 'pos', 'credit', 'inst', 'pos_latest', 'credit_latest']
+             'main_ext_source_pairwise', 'bureau', 'prev', 'pos', 'credit', 'inst', 'pos_latest', 'credit_latest',
+             'bureau_active_and_type_product', 'bureau_active_count']
     X_train, y_train, X_test, cv = load_dataset(feats)
     print('train:', X_train.shape)
     print('test :', X_test.shape)

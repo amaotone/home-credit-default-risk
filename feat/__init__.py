@@ -16,7 +16,7 @@ def get_arguments(description):
     return parser.parse_args()
 
 
-def generate_features(features, overwrite=False):
+def generate_features(features, overwrite):
     for f in features:
         if f.train_path.exists() and f.test_path.exists() and not overwrite:
             print(f.name, 'was skipped')

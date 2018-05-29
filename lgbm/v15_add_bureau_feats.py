@@ -13,6 +13,7 @@ from utils import generate_submit, load_dataset, send_line_notification
 from category_encoders import TargetEncoder
 from config import *
 from utils import timer
+
 sns.set_style('darkgrid')
 
 NAME = Path(__file__).stem
@@ -20,7 +21,9 @@ print(NAME)
 
 with timer('load datasets'):
     feats = ['main_numeric', 'main_days_to_years', 'main_days_pairwise', 'main_money_pairwise', 'main_target_enc',
-             'main_ext_source_pairwise', 'bureau', 'prev', 'pos', 'credit', 'inst', 'pos_latest', 'credit_latest']
+             'main_ext_source_pairwise', 'bureau', 'prev', 'pos', 'credit', 'inst', 'pos_latest', 'credit_latest',
+             'bureau_active_and_type_product', 'bureau_active_count',
+             'bureau_enddate', 'bureau_amount_pairwise', 'bureau_prolonged']
     X_train, y_train, X_test, cv = load_dataset(feats)
     print('train:', X_train.shape)
     print('test :', X_test.shape)
@@ -52,16 +55,18 @@ with timer('training'):
     test_df = pd.DataFrame()
     feat_df = pd.DataFrame(index=X_train.columns)
     for i, (trn_idx, val_idx) in enumerate(cv.split(X_train, y_train)):
-        X_trn = X_train.iloc[trn_idx]
+        X_trn = X_train.iloc[trn_idx].copy()
         y_trn = y_train[trn_idx]
-        X_val = X_train.iloc[val_idx]
+        X_val = X_train.iloc[val_idx].copy()
         y_val = y_train[val_idx]
+        X_test_ = X_test.copy()
         print('=' * 30, f'FOLD {i+1}/{cv.get_n_splits()}', '=' * 30)
         with timer('target encoding'):
-            te = TargetEncoder()
-            X_trn = te.fit_transform(X_trn, y_trn)
-            X_val = te.transform(X_val)
-            X_test_ = te.transform(X_test)
+            cat_cols = X_train.select_dtypes(['object']).columns.tolist()
+            te = TargetEncoder(cols=cat_cols)
+            X_trn.loc[:, cat_cols] = te.fit_transform(X_trn.loc[:, cat_cols], y_trn)
+            X_val.loc[:, cat_cols] = te.transform(X_val.loc[:, cat_cols])
+            X_test_.loc[:, cat_cols] = te.transform(X_test.loc[:, cat_cols])
             X_trn.fillna(-9999)
             X_val.fillna(-9999)
             X_test_.fillna(-9999)

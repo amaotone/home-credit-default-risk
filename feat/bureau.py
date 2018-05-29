@@ -1,58 +1,110 @@
-import pandas as pd
-from sklearn.preprocessing import LabelEncoder
-
-from tqdm import tqdm
-
-tqdm.pandas()
-
-import sys
+import itertools
 import os
+import sys
+
+import numpy as np
+import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from feat import Feature, get_arguments, generate_features
+from utils import timer
 from config import *
 
-PREFIX = 'bureau_'
+CREDIT_CAT_COLS = ['NAME_CONTRACT_STATUS']
 
-print('load datasets')
-train = pd.read_feather(INPUT / 'application_train.ftr')
-test = pd.read_feather(INPUT / 'application_test.ftr')
-bureau = pd.read_feather(INPUT / 'bureau.ftr')
-bureau_balance = pd.read_feather(INPUT / 'bureau_balance.ftr')
 
-print('preprocessing bureau balance')
-buro_bal = bureau_balance.groupby('SK_ID_BUREAU') \
-    .STATUS.value_counts().unstack('STATUS').fillna(0).astype(int)
+class BureauActiveCount(Feature):
+    def create_features(self):
+        df = buro.groupby('SK_ID_CURR').CREDIT_ACTIVE.value_counts().unstack().fillna(0).astype(int)
+        df.columns = 'bureau_' + df.columns + '_count'
+        sum_ = df.sum(axis=1)
+        for f in df.columns:
+            df[f.replace('_count', '_ratio')] = df[f] / sum_
+        self.train = train.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
+        self.test = test.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
 
-buro_bal.columns = 'status_' + buro_bal.columns + '_cnt'
 
-buro_bal['months_cnt'] = bureau_balance.groupby('SK_ID_BUREAU').MONTHS_BALANCE.size()
-buro_bal['months_max'] = bureau_balance.groupby('SK_ID_BUREAU').MONTHS_BALANCE.max()
-buro_bal['months_min'] = bureau_balance.groupby('SK_ID_BUREAU').MONTHS_BALANCE.min()
-buro_bal['latest_status'] = bureau_balance.groupby('SK_ID_BUREAU').STATUS.head(1)
+class BureauActiveAndTypeProduct(Feature):
+    def create_features(self):
+        tmp = buro.copy()
+        tmp['TMP'] = tmp.CREDIT_ACTIVE + '_' + tmp.CREDIT_TYPE
+        df = tmp.groupby('SK_ID_CURR').TMP.value_counts().unstack().fillna(0).astype(int)
+        df.columns = 'bureau_' + df.columns + '_count'
+        sum_ = df.sum(axis=1)
+        for f in df.columns:
+            df[f.replace('_count', '_ratio')] = df[f] / sum_
+        self.train = train.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
+        self.test = test.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
 
-for f in tqdm(buro_bal.filter(regex='status_').columns):
-    buro_bal[f.replace('_cnt', '_ratio')] = buro_bal[f] / buro_bal.months_cnt
 
-buro = bureau.merge(buro_bal.reset_index(), how='left', on='SK_ID_BUREAU')
+class BureauInterval(Feature):
+    # https://www.kaggle.com/shanth84/home-credit-bureau-data-feature-engineering
+    def create_features(self):
+        df = pd.DataFrame()
+        group = buro.groupby('SK_ID_CURR').DAYS_CREDIT
+        df['bureau_interval_latest'] = group.apply(lambda x: x.diff().iloc[-1]).fillna(0)
+        df['bureau_interval_min'] = group.apply(lambda x: x.diff().min()).fillna(0)
+        df['bureau_interval_mean'] = group.apply(lambda x: x.diff().mean()).fillna(0)
+        df['bureau_interval_max'] = group.apply(lambda x: x.diff().max()).fillna(0)
+        self.train = train.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
+        self.test = test.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
 
-print('encode categorical features')
-le = LabelEncoder()
-buro_cat = [f for f in buro.columns if buro[f].dtype == 'object']
-for f in tqdm(buro_cat):
-    buro[f] = le.fit_transform(buro[f].astype(str))
-    nunique = buro[['SK_ID_CURR', f]].groupby('SK_ID_CURR').nunique()
-    nunique = nunique[f].reset_index().rename(columns={f: 'nunique_' + f})
-    buro = buro.merge(nunique, on='SK_ID_CURR', how='left')
-    buro.drop(f, axis=1, inplace=True)
 
-avg_buro = buro.groupby('SK_ID_CURR').mean().drop('SK_ID_BUREAU', axis=1)
-avg_buro.columns = PREFIX + avg_buro.columns
+class BureauEnddate(Feature):
+    # https://www.kaggle.com/shanth84/home-credit-bureau-data-feature-engineering
+    def create_features(self):
+        tmp = buro.copy()
+        tmp['TMP'] = tmp.DAYS_CREDIT_ENDDATE > 0
+        df = pd.DataFrame()
+        df['bureau_future_expire_count'] = tmp.groupby('SK_ID_CURR').TMP.sum().fillna(0)
+        df['bureau_future_expire_ratio'] = tmp.groupby('SK_ID_CURR').TMP.mean().fillna(0)
+        future = buro.query('DAYS_CREDIT_ENDDATE > 0').groupby('SK_ID_CURR').DAYS_CREDIT_ENDDATE
+        df['bureau_future_expire_mean'] = future.mean().fillna(0)
+        df['bureau_future_expire_min'] = future.min().fillna(0)
+        df['bureau_future_expire_interval_first'] = future.apply(lambda x: x.diff().iloc[0]).fillna(0)
+        df['bureau_future_expire_interval_min'] = future.apply(lambda x: x.diff().min()).fillna(0)
+        df['bureau_future_expire_interval_mean'] = future.apply(lambda x: x.diff().mean()).fillna(0)
+        df['bureau_future_expire_interval_max'] = future.apply(lambda x: x.diff().max()).fillna(0)
+        self.train = train.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
+        self.test = test.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
 
-print('add count and null feature')
-avg_buro[f'{PREFIX}cnt'] = buro.groupby('SK_ID_CURR').SK_ID_BUREAU.count()
-avg_buro[f'{PREFIX}null_cnt'] = avg_buro.isnull().sum(axis=1)
 
-train.merge(avg_buro, left_on='SK_ID_CURR', right_index=True, how='left') \
-    .filter(regex=PREFIX).to_feather(WORKING / f'{PREFIX}train.ftr')
-test.merge(avg_buro, left_on='SK_ID_CURR', right_index=True, how='left') \
-    .filter(regex=PREFIX).to_feather(WORKING / f'{PREFIX}test.ftr')
+class BureauAmountPairwise(Feature):
+    def create_features(self):
+        df = pd.DataFrame()
+        amt_cols = buro.filter(regex='^AMT_').columns.tolist()
+        for i, j in itertools.combinations(amt_cols, 2):
+            df[f'bureau_{i}_minus_{j}'] = buro[i] - buro[j]
+        self.train = train.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
+        self.test = test.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
+
+
+class BureauProlonged(Feature):
+    def create_features(self):
+        df = pd.DataFrame()
+        df['bureau_prolonged_count'] = buro.groupby('SK_ID_CURR').CNT_CREDIT_PROLONG.fillna(0).sum()
+        df['bureau_prolonged_mean'] = buro.groupby('SK_ID_CURR').CNT_CREDIT_PROLONG.fillna(0).mean()
+        self.train = train.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
+        self.test = test.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
+
+
+if __name__ == '__main__':
+    args = get_arguments('POS CASH')
+    with timer('load dataset'):
+        train = pd.read_feather(TRAIN)[['SK_ID_CURR']]
+        test = pd.read_feather(TEST)[['SK_ID_CURR']]
+        buro = pd.read_feather(BURO)
+    
+    with timer('preprocessing'):
+        buro.drop(['SK_ID_BUREAU'], axis=1, inplace=True)
+        buro = buro.sort_values(['SK_ID_CURR', 'DAYS_CREDIT']).reset_index(drop=True)
+        buro.loc[:, buro.columns.str.startswith('AMT_')] = np.log1p(buro.filter(regex='^(AMT_)'))
+        buro.loc[:, buro.columns.str.startswith('DAYS_')] = buro.filter(regex='^DAYS_').replace({365243: np.nan})
+        buro.CREDIT_TYPE = buro.CREDIT_TYPE.str.replace(' ', '_')
+    
+    with timer('create dataset'):
+        generate_features([
+            BureauActiveCount(), BureauActiveAndTypeProduct(), BureauInterval(),
+            BureauEnddate(), BureauAmountPairwise(), BureauProlonged()
+        ], args.force)
