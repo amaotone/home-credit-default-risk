@@ -43,6 +43,18 @@ class MainExtNull(Feature):
         self.test['EXT_SOURCE_null_cnt'] = test.filter(regex='EXT_').isnull().sum(axis=1)
 
 
+class MainDocument(Feature):
+    def create_features(self):
+        self.train = train.filter(regex='FLAG_DOCUMENT').sum(axis=1).to_frame('document_count')
+        self.test = test.filter(regex='FLAG_DOCUMENT').sum(axis=1).to_frame('document_count')
+
+
+class MainEnquiry(Feature):
+    def create_features(self):
+        self.train = train.filter(regex='AMT_REQ_').cumsum(axis=1).drop('AMT_REQ_CREDIT_BUREAU_HOUR', axis=1)
+        self.test = test.filter(regex='AMT_REQ_').cumsum(axis=1).drop('AMT_REQ_CREDIT_BUREAU_HOUR', axis=1)
+
+
 if __name__ == '__main__':
     args = get_arguments('main')
     with timer('load dataset'):
@@ -55,5 +67,8 @@ if __name__ == '__main__':
     
     with timer('create dataset'):
         generate_features([
-            MainCategory(), MainExtNull()
+            MainCategory(),
+            MainExtNull(),
+            MainDocument('main'),
+            MainEnquiry('main', 'cumsum')
         ], args.force)

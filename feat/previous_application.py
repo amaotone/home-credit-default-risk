@@ -4,6 +4,8 @@ import sys
 
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.feature_extraction.text import TfidfTransformer
 from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,17 +34,49 @@ class PrevLastApproved(SubfileFeature):
             .drop(['NAME_CONTRACT_STATUS', 'CODE_REJECT_REASON'], axis=1)
 
 
-class PrevContractStatus(SubfileFeature):
+class PrevCategoryCount(SubfileFeature):
     def create_features(self):
-        count = prev.groupby('SK_ID_CURR').NAME_CONTRACT_STATUS.value_counts().unstack().fillna(0).astype(int)
-        ratio = count.apply(lambda x: x / count.sum(axis=1))
-        status = pd.merge(count, ratio, left_index=True, right_index=True, suffixes=['count', 'ratio'])
-        
-        count = prev.groupby('SK_ID_CURR').CODE_REJECT_REASON.value_counts().unstack().fillna(0).astype(int)
-        ratio = count.apply(lambda x: x / count.sum(axis=1))
-        reason = pd.merge(count, ratio, left_index=True, right_index=True, suffixes=['count', 'ratio'])
-        
-        self.df = pd.concat([status, reason], axis=1)
+        dfs = []
+        for f in tqdm(prev.select_dtypes(['object']).columns):
+            count = prev.groupby('SK_ID_CURR')[f].value_counts().unstack().fillna(0).astype(int)
+            ratio = count.apply(lambda x: x / count.sum(axis=1))
+            count.columns = f + '_' + count.columns + '_count'
+            ratio.columns = f + '_' + ratio.columns + '_ratio'
+            df = pd.concat([count, ratio], axis=1)
+            df.columns = f + '_' + df.columns
+            df[f + '_nunique'] = prev.groupby('SK_ID_CURR')[f].nunique()
+            # df[f + '_latest'] = prev.groupby('SK_ID_CURR')[f].last()
+            dfs.append(df)
+        self.df = pd.concat(dfs, axis=1)
+
+
+class PrevCategoryTfidf(SubfileFeature):
+    def create_features(self):
+        dfs = []
+        tfidf_transformer = TfidfTransformer()
+        for f in tqdm(prev.select_dtypes(['object']).columns):
+            count = prev.groupby('SK_ID_CURR')[f].value_counts().unstack().fillna(0).astype(int)
+            df = pd.DataFrame(
+                tfidf_transformer.fit_transform(count).toarray(),
+                index=count.index, columns=[f'{f}_tfidf_{i}' for i in range(count.shape[1])])
+            dfs.append(df)
+        self.df = pd.concat(dfs, axis=1)
+
+
+class PrevCategoryLda(SubfileFeature):
+    def create_features(self):
+        dfs = []
+        n_components = 2
+        lda = LatentDirichletAllocation(
+            n_components=n_components, learning_method='online', n_jobs=-1, random_state=71,
+            batch_size=256, max_iter=5
+        )
+        for f in tqdm(prev.select_dtypes(['object']).columns):
+            count = prev.groupby('SK_ID_CURR')[f].value_counts().unstack().fillna(0).astype(int)
+            df = pd.DataFrame(lda.fit_transform(count), index=count.index,
+                              columns=[f'{f}_lda_{i}' for i in range(n_components)])
+            dfs.append(df)
+        self.df = pd.concat(dfs, axis=1)
 
 
 class PrevBasic(SubfileFeature):
@@ -88,12 +122,15 @@ if __name__ == '__main__':
         # prev.loc[:, prev.columns.str.startswith('DAYS_')] = prev.filter(regex='^DAYS_').replace({365243: np.nan})
         prev.AMT_DOWN_PAYMENT.fillna(0)
         prev.RATE_DOWN_PAYMENT.fillna(0)
-        prev.NAME_TYPE_SUITE.fillna('XAP')
+        cat_cols = prev.select_dtypes(['object']).columns
+        prev[cat_cols] = prev[cat_cols].fillna('NaN')
     
     with timer('create dataset'):
         generate_features([
             PrevLatest('prev', 'latest'),
             PrevLastApproved('prev', 'last_approved'),
-            PrevContractStatus('prev', ''),
+            PrevCategoryCount('prev', ''),
+            PrevCategoryTfidf('prev'),
+            PrevCategoryLda('prev'),
             PrevBasic('prev', '')
         ], args.force)
