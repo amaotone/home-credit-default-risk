@@ -2,25 +2,18 @@ import itertools
 import os
 import sys
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import TfidfTransformer
 from tqdm import tqdm
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from feat import SubfileFeature, get_arguments, generate_features
 from utils import timer
 from config import *
 
-PREV_CAT_COLS = ['NAME_CONTRACT_STATUS', 'WEEKDAY_APPR_PROCESS_START',
-                 # 'HOUR_APPR_PROCESS_START',
-                 'FLAG_LAST_APPL_PER_CONTRACT', 'NFLAG_LAST_APPL_IN_DAY', 'NAME_CASH_LOAN_PURPOSE',
-                 'NAME_CONTRACT_STATUS', 'CODE_REJECT_REASON',
-                 'NAME_PAYMENT_TYPE', 'NAME_TYPE_SUITE', 'NAME_CLIENT_TYPE', 'NAME_GOODS_CATEGORY', 'NAME_PORTFOLIO',
-                 'NAME_PRODUCT_TYPE', 'CHANNEL_TYPE', 'SELLERPLACE_AREA', 'NAME_SELLER_INDUSTRY', 'NAME_YIELD_GROUP',
-                 'PRODUCT_COMBINATION', 'NFLAG_INSURED_ON_APPROVAL']
 
 
 class PrevLatest(SubfileFeature):
@@ -107,6 +100,32 @@ class PrevBasic(SubfileFeature):
         self.df = pd.concat([min_df, mean_df, max_df], axis=1)
 
 
+class PrevProductCombination(SubfileFeature):
+    def create_features(self):
+        df = prev[['SK_ID_CURR']].copy()
+        mapping = {
+            'interest': 'with interest',
+            'pos': 'POS',
+            'cash': 'Cash',
+            'card': 'Card',
+            'mobile': 'mobile',
+            'household': 'household',
+            'industry': 'industry',
+            'x_sell': 'X-Sell',
+            'street': 'Street',
+            'low': 'low',
+            'middle': 'middle',
+            'high': 'high'
+        }
+        for k, v in mapping.items():
+            df[k] = prev.PRODUCT_COMBINATION.str.contains(v).fillna(False).astype(int)
+        self.df = pd.concat([
+            df.groupby('SK_ID_CURR').min().rename(columns=lambda x: x + '_min'),
+            df.groupby('SK_ID_CURR').mean().rename(columns=lambda x: x + '_mean'),
+            df.groupby('SK_ID_CURR').max().rename(columns=lambda x: x + '_max')
+        ], axis=1)
+
+
 if __name__ == '__main__':
     args = get_arguments(Path(__file__).stem)
     with timer('load dataset'):
@@ -132,5 +151,6 @@ if __name__ == '__main__':
             PrevCategoryCount('prev', ''),
             PrevCategoryTfidf('prev'),
             PrevCategoryLda('prev'),
-            PrevBasic('prev', '')
+            PrevBasic('prev', ''),
+            PrevProductCombination('prev'),
         ], args.force)

@@ -57,7 +57,7 @@ lgb_params = {
 }
 calc_weight_params = {
     'n_estimators': 500,
-    'learning_rate': 0.05,
+    'learning_rate': 0.1,
     'num_leaves': 34,
     'colsample_bytree': 0.95,
     'subsample': 0.85,
@@ -124,8 +124,8 @@ with timer('training'):
             model = lgb.LGBMClassifier(**calc_weight_params)
             model.fit(X, y)
             proba = np.sqrt(rankdata(model.predict_proba(X)[:len(X_trn), 1])/len(X_trn))
-            X_trn.drop('is_test', axis=1)
-            X_tst.drop('is_test', axis=1)
+            X_trn.drop('is_test', axis=1, inplace=True)
+            X_tst.drop('is_test', axis=1, inplace=True)
         
         with timer('fit'):
             model = lgb.LGBMClassifier(**lgb_params)

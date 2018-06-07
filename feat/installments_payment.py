@@ -1,12 +1,13 @@
 import os
 import sys
 
-import numpy as np
-import pandas as pd
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from feat import Feature, get_arguments, generate_features
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+
+from feat import Feature, get_arguments, generate_features, SubfileFeature
 from utils import timer
 from config import *
 
@@ -19,6 +20,14 @@ class InstLatest(Feature):
         df.columns = 'inst_' + df.columns + '_latest'
         self.train = train.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
         self.test = test.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
+
+
+class InstEwm(SubfileFeature):
+    def create_features(self):
+        cols = inst.drop('SK_ID_CURR', axis=1).columns
+        self.df = pd.DataFrame()
+        for f in tqdm(cols):
+            self.df[f] = inst.groupby('SK_ID_CURR')[f].apply(lambda x: float(x.ewm(com=0.5).mean().tail(1).values))
 
 
 if __name__ == '__main__':
@@ -35,4 +44,7 @@ if __name__ == '__main__':
         inst.loc[:, inst.columns.str.startswith('DAYS_')] = inst.filter(regex='^DAYS_').replace({365243: np.nan})
     
     with timer('create dataset'):
-        generate_features([InstLatest()])
+        generate_features([
+            InstLatest(),
+            InstEwm('inst', 'ewm')
+        ], args.force)

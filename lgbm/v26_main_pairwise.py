@@ -9,24 +9,23 @@ import seaborn as sns
 from scipy.stats import rankdata
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
-import gc
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import generate_submit, load_dataset, send_line_notification
-from feat.weight_of_evidence import WeightOfEvidence
 from category_encoders import TargetEncoder
 from config import *
 from utils import timer
 
 sns.set_style('darkgrid')
 
-feats = ['main_numeric', 'main_days_to_years', 'main_days_pairwise', 'main_money_pairwise', 'main_category',
-         'main_ext_source_pairwise', 'bureau', 'prev', 'pos', 'credit', 'inst',
-         'pos_latest', 'credit_latest', 'inst_latest',
-         'bureau_active_count', 'bureau_enddate', 'bureau_amount_pairwise', 'bureau_prolonged',
-         'main_ext_null',
-         'prev_basic', 'prev_category_count', 'prev_category_tfidf',
-         'main_document', 'main_enquiry', 'prev_product_combination']
+feats = [
+    'main_numeric', 'main_days_to_years', 'main_days_pairwise', 'main_amount_pairwise', 'main_category',
+    'main_ext_pairwise', 'bureau', 'prev', 'pos', 'credit', 'inst',
+    'pos_latest', 'credit_latest', 'inst_latest',
+    'bureau_active_count', 'bureau_enddate', 'bureau_amount_pairwise', 'bureau_prolonged',
+    'main_ext_null',
+    'prev_basic', 'prev_category_count', 'prev_category_tfidf',
+    'main_document', 'main_enquiry', 'prev_product_combination', 'inst_ewm']
 rank_average = False
 
 NAME = Path(__file__).stem
@@ -45,9 +44,11 @@ lgb_params = {
     'num_leaves': 34,
     'colsample_bytree': 0.95,
     'subsample': 0.85,
-    'max_depth': 8,
+    # 'max_depth': 8,
     'reg_alpha': 0.05,
     'reg_lambda': 0.075,
+    # 'reg_alpha': 1,
+    # 'reg_lambda': 1,
     'min_split_gain': 0.02,
     'min_child_weight': 40,
     'random_state': 71,
@@ -77,16 +78,17 @@ fit_params = {
     'verbose': 100
 }
 
-
 with timer('impute missing'):
-    num_cols = X_train.select_dtypes(exclude=['object']).columns
-    mean = X_train.loc[:, num_cols].mean()
-    X_train.loc[:, num_cols] = X_train.loc[:, num_cols].fillna(mean)
-    X_test.loc[:, num_cols] = X_test.loc[:, num_cols].fillna(mean)
-    
-    cat_cols = X_train.select_dtypes(['object']).columns
-    X_train.loc[:, cat_cols] = X_train.loc[:, cat_cols].fillna('NaN')
-    X_test.loc[:, cat_cols] = X_test.loc[:, cat_cols].fillna('NaN')
+    X_train.fillna(-9999, inplace=True)
+    X_test.fillna(-9999, inplace=True)
+    # num_cols = X_train.select_dtypes(exclude=['object']).columns
+    # mean = X_train.loc[:, num_cols].mean()
+    # X_train.loc[:, num_cols] = X_train.loc[:, num_cols].fillna(mean)
+    # X_test.loc[:, num_cols] = X_test.loc[:, num_cols].fillna(mean)
+    #
+    # cat_cols = X_train.select_dtypes(['object']).columns
+    # X_train.loc[:, cat_cols] = X_train.loc[:, cat_cols].fillna('NaN')
+    # X_test.loc[:, cat_cols] = X_test.loc[:, cat_cols].fillna('NaN')
 
 with timer('training'):
     cv_results = []
@@ -114,22 +116,22 @@ with timer('training'):
             X_trn.loc[:, cat_cols] = te.fit_transform(X_trn.loc[:, cat_cols], y_trn)
             X_val.loc[:, cat_cols] = te.transform(X_val.loc[:, cat_cols])
             X_tst.loc[:, cat_cols] = te.transform(X_test.loc[:, cat_cols])
-            
-        with timer('calc sample weight'):
-            X_trn['is_test'] = 0
-            X_tst['is_test'] = 1
-            df = pd.concat([X_trn, X_tst])
-            X = df.drop('is_test', axis=1)
-            y = df.is_test.ravel()
-            model = lgb.LGBMClassifier(**calc_weight_params)
-            model.fit(X, y)
-            proba = np.sqrt(rankdata(model.predict_proba(X)[:len(X_trn), 1])/len(X_trn))
-            X_trn.drop('is_test', axis=1)
-            X_tst.drop('is_test', axis=1)
+        
+        # with timer('calc sample weight'):
+        #     X_trn['is_test'] = 0
+        #     X_tst['is_test'] = 1
+        #     df = pd.concat([X_trn, X_tst])
+        #     X = df.drop('is_test', axis=1)
+        #     y = df.is_test.ravel()
+        #     model = lgb.LGBMClassifier(**calc_weight_params)
+        #     model.fit(X, y)
+        #     proba = np.sqrt(rankdata(model.predict_proba(X)[:len(X_trn), 1])/len(X_trn))
+        #     X_trn.drop('is_test', axis=1)
+        #     X_tst.drop('is_test', axis=1)
         
         with timer('fit'):
             model = lgb.LGBMClassifier(**lgb_params)
-            model.fit(X_trn, y_trn, sample_weight=proba, eval_set=[(X_val, y_val)], **fit_params)
+            model.fit(X_trn, y_trn, eval_set=[(X_val, y_val)], **fit_params)
         
         p = model.predict_proba(X_val)[:, 1]
         val_series.iloc[val_idx] = p
@@ -142,7 +144,7 @@ with timer('training'):
 val_df = pd.DataFrame({'TARGET': y_train, 'p': val_series}).to_csv(OUTPUT / f'{NAME}_cv_pred.csv', index=False)
 valid_score = np.mean(cv_results)
 
-message = f"""cv: {valid_score: .5f}
+message = f"""cv: {valid_score:.5f}
 feats: {feats}
 model_params: {lgb_params}
 fit_params: {fit_params}"""
