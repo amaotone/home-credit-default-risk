@@ -20,6 +20,27 @@ class MainCategory(Feature):
         self.test.columns = 'main_' + self.test.columns
 
 
+class MainDayPairwise(Feature):
+    def create_features(self):
+        day_cols = ['DAYS_BIRTH', 'DAYS_EMPLOYED', 'DAYS_REGISTRATION', 'DAYS_ID_PUBLISH']
+        # 欠損処理してない
+        for i, j in itertools.combinations(day_cols, 2):
+            self.train[f'{i}_sub_{j}'] = train[i] - train[j]
+            self.train[f'{i}_div_{j}'] = train[i] / (train[j] + 0.1)
+            self.test[f'{i}_sub_{j}'] = test[i] - test[j]
+            self.test[f'{i}_div_{j}'] = test[i] / (test[j] + 0.1)
+
+
+class MainAmountPerPerson(Feature):
+    def create_features(self):
+        # 欠損処理してない
+        person_cols = ['CNT_FAM_MEMBERS', 'CNT_CHILDREN']
+        amt_cols = ['AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE']
+        for person, amt in itertools.product(person_cols, amt_cols):
+            self.train[f'{amt}_per_{person}'] = train[amt] / (train[person] + 0.1)
+            self.test[f'{amt}_per_{person}'] = test[amt] / (test[person] + 0.1)
+
+
 class MainAmountPairwise(Feature):
     def create_features(self):
         self.train = pd.DataFrame()
@@ -29,9 +50,7 @@ class MainAmountPairwise(Feature):
             for f in amt_cols:
                 name = f'{f}_{funcname}'
                 self.train[name] = func(train[f])
-                self.train[name].fillna(self.train[name].mean(), inplace=True)
                 self.test[name] = func(test[f])
-                self.test[name].fillna(self.train[name].mean(), inplace=True)
             
             cols = self.train.filter(regex=f'^AMT_(.*)_{funcname}$').columns.tolist()
             for i, j in itertools.combinations(cols, 2):
@@ -43,16 +62,15 @@ class MainAmountPairwise(Feature):
             
             self.train[f'AMT_{funcname}_mean'] = self.train[cols].mean(axis=1)
             self.test[f'AMT_{funcname}_mean'] = self.test[cols].mean(axis=1)
-
+        
 
 class MainExtPairwise(Feature):
     def create_features(self):
         self.train = pd.DataFrame()
         self.test = pd.DataFrame()
         ext_cols = ['EXT_SOURCE_1', 'EXT_SOURCE_2', 'EXT_SOURCE_3']
-        for f in ext_cols:
-            self.train[f] = train[f].fillna(train[f].mean())
-            self.test[f] = test[f].fillna(train[f].mean())
+        self.train[ext_cols] = train[ext_cols]
+        self.test[ext_cols] = test[ext_cols]
         for i, j in itertools.combinations(ext_cols, 2):
             self.train[f'{i}_add_{j}'] = self.train[i] + self.train[j]
             self.train[f'{i}_sub_{j}'] = self.train[i] - self.train[j]
@@ -112,6 +130,8 @@ if __name__ == '__main__':
     with timer('preprocessing'):
         train.replace({'XAP': np.nan, 'XAN': np.nan}, inplace=True)
         test.replace({'XAP': np.nan, 'XAN': np.nan}, inplace=True)
+        train.filter(regex='DAYS_').replace(365243, np.nan, inplace=True)
+        test.filter(regex='DAYS_').replace(365243, np.nan, inplace=True)
     
     with timer('create dataset'):
         generate_features([
@@ -120,5 +140,7 @@ if __name__ == '__main__':
             MainDocument('main'),
             MainEnquiry('main', 'cumsum'),
             MainAmountPairwise('main'),
-            MainExtPairwise('main')
+            MainExtPairwise('main'),
+            MainDayPairwise('main'),
+            MainAmountPerPerson('main')
         ], args.force)

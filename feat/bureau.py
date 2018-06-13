@@ -7,11 +7,14 @@ import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from feat import Feature, get_arguments, generate_features
+from feat import Feature, get_arguments, generate_features, SubfileFeature
 from utils import timer
 from config import *
 
 CREDIT_CAT_COLS = ['NAME_CONTRACT_STATUS']
+
+func_for_num = [np.min, np.max, np.std, np.mean]
+func_for_cat = [lambda x: np.unique(x, return_counts=True)[1]]
 
 
 class BureauActiveCount(Feature):
@@ -23,6 +26,56 @@ class BureauActiveCount(Feature):
             df[f.replace('_count', '_ratio')] = df[f] / sum_
         self.train = train.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
         self.test = test.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
+
+
+class BureauBasic(SubfileFeature):
+    def create_features(self):
+        num_cols = [f for f in buro.columns if buro[f].dtype != 'object']
+        cat_cols = [f for f in buro.columns if buro[f].dtype == 'object']
+        self.df = pd.DataFrame()
+        for f in num_cols:
+            self.df[f'{f}_min'] = buro.groupby('SK_ID_CURR')[f].min()
+            self.df[f'{f}_mean'] = buro.groupby('SK_ID_CURR')[f].mean()
+            self.df[f'{f}_max'] = buro.groupby('SK_ID_CURR')[f].max()
+            self.df[f'{f}_std'] = buro.groupby('SK_ID_CURR')[f].std()
+            self.df[f'{f}_sum'] = buro.groupby('SK_ID_CURR')[f].sum()
+        for f in cat_cols:
+            self.df[f'{f}_nunique'] = buro.groupby('SK_ID_CURR')[f].nunique()
+        self.df['count'] = buro.groupby('SK_ID_CURR').DAYS_CREDIT.count()
+
+
+class BureauActive(SubfileFeature):
+    def create_features(self):
+        num_cols = [f for f in buro.columns if buro[f].dtype != 'object']
+        cat_cols = [f for f in buro.columns if buro[f].dtype == 'object']
+        self.df = pd.DataFrame()
+        buro_active = buro.query('CREDIT_ACTIVE=="Active"').drop('CREDIT_ACTIVE', axis=1)
+        for f in num_cols:
+            self.df[f'{f}_min'] = buro_active.groupby('SK_ID_CURR')[f].min()
+            self.df[f'{f}_mean'] = buro_active.groupby('SK_ID_CURR')[f].mean()
+            self.df[f'{f}_max'] = buro_active.groupby('SK_ID_CURR')[f].max()
+            self.df[f'{f}_std'] = buro_active.groupby('SK_ID_CURR')[f].std()
+            self.df[f'{f}_sum'] = buro_active.groupby('SK_ID_CURR')[f].sum()
+        for f in cat_cols:
+            self.df[f'{f}_nunique'] = buro_active.groupby('SK_ID_CURR')[f].nunique()
+        self.df['count'] = buro_active.groupby('SK_ID_CURR').DAYS_CREDIT.count()
+
+
+class BureauClosed(SubfileFeature):
+    def create_features(self):
+        num_cols = [f for f in buro.columns if buro[f].dtype != 'object']
+        cat_cols = [f for f in buro.columns if buro[f].dtype == 'object']
+        self.df = pd.DataFrame()
+        buro_closed = buro.query('CREDIT_ACTIVE=="Closed"').drop('CREDIT_ACTIVE', axis=1)
+        for f in num_cols:
+            self.df[f'{f}_min'] = buro_closed.groupby('SK_ID_CURR')[f].min()
+            self.df[f'{f}_mean'] = buro_closed.groupby('SK_ID_CURR')[f].mean()
+            self.df[f'{f}_max'] = buro_closed.groupby('SK_ID_CURR')[f].max()
+            self.df[f'{f}_std'] = buro_closed.groupby('SK_ID_CURR')[f].std()
+            self.df[f'{f}_sum'] = buro_closed.groupby('SK_ID_CURR')[f].sum()
+        for f in cat_cols:
+            self.df[f'{f}_nunique'] = buro_closed.groupby('SK_ID_CURR')[f].nunique()
+        self.df['count'] = buro_closed.groupby('SK_ID_CURR').DAYS_CREDIT.count()
 
 
 class BureauActiveAndTypeProduct(Feature):
@@ -95,6 +148,7 @@ if __name__ == '__main__':
         train = pd.read_feather(TRAIN)[['SK_ID_CURR']]
         test = pd.read_feather(TEST)[['SK_ID_CURR']]
         buro = pd.read_feather(BURO)
+        # buro_bal = pd.read_feather(BURO_BAL)
     
     with timer('preprocessing'):
         buro.drop(['SK_ID_BUREAU'], axis=1, inplace=True)
@@ -106,5 +160,6 @@ if __name__ == '__main__':
     with timer('create dataset'):
         generate_features([
             BureauActiveCount(), BureauActiveAndTypeProduct(), BureauInterval(),
-            BureauEnddate(), BureauAmountPairwise(), BureauProlonged()
+            BureauEnddate(), BureauAmountPairwise(), BureauProlonged(),
+            BureauBasic('buro'), BureauActive('buro_active'), BureauClosed('buro_closed')
         ], args.force)

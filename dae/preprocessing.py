@@ -15,7 +15,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import mean_squared_error
 
 from utils import load_dataset, timer
-from nn.gaussrank import gauss_rank
+from vega.gaussrank import gauss_rank
 from config import *
 
 from keras.callbacks import EarlyStopping, ModelCheckpoint, CSVLogger

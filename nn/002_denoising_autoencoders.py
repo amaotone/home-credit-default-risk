@@ -16,7 +16,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import LabelEncoder
 
 from utils import generate_submit, load_dataset, send_line_notification, timer
-from nn.gaussrank import gauss_rank
+from vega.gaussrank import gauss_rank
 from config import *
 
 from sklearn.metrics import roc_auc_score

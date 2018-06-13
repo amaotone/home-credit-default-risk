@@ -23,8 +23,9 @@ class WeightOfEvidence:
         r = pd.DataFrame()
         for f in tqdm(self.cols):
             ref = X[f].fillna('NaN')
+            mask = ~ref.isin(self.maps.keys())
             r[f] = ref.replace(self.maps[f])
-            r[r[f] == ref] = self.unknown
+            r[mask] = self.unknown
         r.columns = self.prefix + r.columns + self.suffix
         return r
     

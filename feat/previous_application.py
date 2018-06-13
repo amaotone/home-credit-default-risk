@@ -15,7 +15,6 @@ from utils import timer
 from config import *
 
 
-
 class PrevLatest(SubfileFeature):
     def create_features(self):
         self.df = prev.groupby('SK_ID_CURR').last()
@@ -25,6 +24,71 @@ class PrevLastApproved(SubfileFeature):
     def create_features(self):
         self.df = prev.query("NAME_CONTRACT_STATUS=='Approved'").groupby('SK_ID_CURR').last() \
             .drop(['NAME_CONTRACT_STATUS', 'CODE_REJECT_REASON'], axis=1)
+
+
+# class PrevBasicAll(SubfileFeature):
+#     def create_features(self):
+#         prev_ = prev.copy()
+#         prev_['APP_PER_CREDIT'] = prev_['AMT_APPLICATION'] / prev_['AMT_CREDIT']
+#         num_cols = [f for f in prev_.columns if prev_[f].dtype != 'object']
+#         cat_cols = [f for f in prev_.columns if prev_[f].dtype == 'object']
+#         self.df = pd.DataFrame()
+#         for f in num_cols:
+#             self.df[f'{f}_min'] = prev_.groupby('SK_ID_CURR')[f].min()
+#             self.df[f'{f}_mean'] = prev_.groupby('SK_ID_CURR')[f].mean()
+#             self.df[f'{f}_max'] = prev_.groupby('SK_ID_CURR')[f].max()
+#             self.df[f'{f}_std'] = prev_.groupby('SK_ID_CURR')[f].std()
+#             self.df[f'{f}_sum'] = prev_.groupby('SK_ID_CURR')[f].sum()
+#         for f in cat_cols:
+#             self.df[f'{f}_nunique'] = prev_.groupby('SK_ID_CURR')[f].nunique()
+#         self.df['count'] = prev_.groupby('SK_ID_CURR').DAYS_DECISION.count()
+#
+#         approved = prev_.query('NAME_CONTRACT_STATUS == "Approved"').drop('NAME_CONTRACT_STATUS', axis=1)
+#         for f in num_cols:
+#             self.df[f'approved_{f}_min'] = approved.groupby('SK_ID_CURR')[f].min()
+#             self.df[f'approved_{f}_mean'] = approved.groupby('SK_ID_CURR')[f].mean()
+#             self.df[f'approved_{f}_max'] = approved.groupby('SK_ID_CURR')[f].max()
+#             self.df[f'approved_{f}_std'] = approved.groupby('SK_ID_CURR')[f].std()
+#             self.df[f'approved_{f}_sum'] = approved.groupby('SK_ID_CURR')[f].sum()
+#         for f in cat_cols:
+#             self.df[f'approved_{f}_nunique'] = approved.groupby('SK_ID_CURR')[f].nunique()
+#         self.df['approved_count'] = approved.groupby('SK_ID_CURR').DAYS_DECISION.count()
+#
+#         refused = prev_.query('NAME_CONTRACT_STATUS == "Refused"').drop('NAME_CONTRACT_STATUS', axis=1)
+#         for f in num_cols:
+#             self.df[f'refused_{f}_min'] = refused.groupby('SK_ID_CURR')[f].min()
+#             self.df[f'refused_{f}_mean'] = refused.groupby('SK_ID_CURR')[f].mean()
+#             self.df[f'refused_{f}_max'] = refused.groupby('SK_ID_CURR')[f].max()
+#             self.df[f'refused_{f}_std'] = refused.groupby('SK_ID_CURR')[f].std()
+#             self.df[f'refused_{f}_sum'] = refused.groupby('SK_ID_CURR')[f].sum()
+#         for f in cat_cols:
+#             self.df[f'refused_{f}_nunique'] = refused.groupby('SK_ID_CURR')[f].nunique()
+#         self.df['refused_count'] = refused.groupby('SK_ID_CURR').DAYS_DECISION.count()
+#
+#
+# class PrevAmountPairwise(SubfileFeature):
+#     def create_features(self):
+#         amt_cols = ['AMT_ANNUITY', 'AMT_APPLICATION', 'AMT_CREDIT', 'AMT_DOWN_PAYMENT', 'AMT_GOODS_PRICE']
+#         prev_ = prev.copy()
+#         for funcname, func in {'log': np.log1p, 'sqrt': np.sqrt}.items():
+#             for f in amt_cols:
+#                 name = f'{f}_{funcname}'
+#                 prev_[name] = func(prev[f])
+#                 prev_[name].fillna(prev_[name].mean(), inplace=True)
+#
+#             cols = [f'{f}_{funcname}' for f in amt_cols]
+#             for i, j in itertools.combinations(cols, 2):
+#                 prev_[f'{i}_sub_{j}'] = prev_[i] - prev_[j]
+#                 prev_[f'{i}_div_{j}'] = prev_[i] / (prev_[j] + 0.1)
+#
+#             prev_[f'AMT_{funcname}_mean'] = prev_[cols].mean(axis=1)
+#         self.df = pd.concat([
+#             prev_.groupby('SK_ID_CURR').min().rename(columns=lambda x: x + '_min'),
+#             prev_.groupby('SK_ID_CURR').mean().rename(columns=lambda x: x + '_mean'),
+#             prev_.groupby('SK_ID_CURR').max().rename(columns=lambda x: x + '_max'),
+#             prev_.groupby('SK_ID_CURR').sum().rename(columns=lambda x: x + '_sum'),
+#             prev_.groupby('SK_ID_CURR').std().rename(columns=lambda x: x + '_std'),
+#         ], axis=1)
 
 
 class PrevCategoryCount(SubfileFeature):
@@ -136,9 +200,9 @@ if __name__ == '__main__':
     with timer('preprocessing'):
         prev.drop(['SK_ID_PREV', 'RATE_INTEREST_PRIMARY', 'RATE_INTEREST_PRIVILEGED'], axis=1, inplace=True)
         prev = prev.sort_values(['SK_ID_CURR', 'DAYS_DECISION']).reset_index(drop=True)
-        prev.loc[:, prev.columns.str.startswith('AMT_')] = np.log1p(prev.filter(regex='^AMT_'))
+        # prev.loc[:, prev.columns.str.startswith('AMT_')] = np.log1p(prev.filter(regex='^AMT_'))
         # prev.replace({'XNA': np.nan, 'XAP': np.nan}, inplace=True)
-        # prev.loc[:, prev.columns.str.startswith('DAYS_')] = prev.filter(regex='^DAYS_').replace({365243: np.nan})
+        prev.loc[:, prev.columns.str.startswith('DAYS_')] = prev.filter(regex='^DAYS_').replace({365243: np.nan})
         prev.AMT_DOWN_PAYMENT.fillna(0)
         prev.RATE_DOWN_PAYMENT.fillna(0)
         cat_cols = prev.select_dtypes(['object']).columns
@@ -153,4 +217,6 @@ if __name__ == '__main__':
             PrevCategoryLda('prev'),
             PrevBasic('prev', ''),
             PrevProductCombination('prev'),
+            PrevBasicAll('prev'),
+            PrevAmountPairwise('prev')
         ], args.force)

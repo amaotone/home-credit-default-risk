@@ -9,11 +9,9 @@ import seaborn as sns
 from scipy.stats import rankdata
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
-import gc
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import generate_submit, load_dataset, send_line_notification
-from feat.weight_of_evidence import WeightOfEvidence
 from category_encoders import TargetEncoder
 from config import *
 from utils import timer
