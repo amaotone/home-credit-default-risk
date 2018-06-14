@@ -7,7 +7,7 @@
 
 convert to feather format
 
-```python
+```bash
 $ cd scripts
 $ python convert_to_feather.py
 ```
