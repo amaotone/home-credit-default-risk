@@ -11,6 +11,10 @@ from feat import Feature, get_arguments, generate_features
 from utils import timer
 from config import *
 
+ext_cols = ['EXT_SOURCE_1', 'EXT_SOURCE_2', 'EXT_SOURCE_3']
+person_cols = ['CNT_FAM_MEMBERS', 'CNT_CHILDREN']
+amt_cols = ['AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE']
+
 
 class MainCategory(Feature):
     def create_features(self):
@@ -34,8 +38,6 @@ class MainDayPairwise(Feature):
 class MainAmountPerPerson(Feature):
     def create_features(self):
         # 欠損処理してない
-        person_cols = ['CNT_FAM_MEMBERS', 'CNT_CHILDREN']
-        amt_cols = ['AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE']
         for person, amt in itertools.product(person_cols, amt_cols):
             self.train[f'{amt}_per_{person}'] = train[amt] / (train[person] + 0.1)
             self.test[f'{amt}_per_{person}'] = test[amt] / (test[person] + 0.1)
@@ -43,9 +45,6 @@ class MainAmountPerPerson(Feature):
 
 class MainAmountPairwise(Feature):
     def create_features(self):
-        self.train = pd.DataFrame()
-        self.test = pd.DataFrame()
-        amt_cols = ['AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE']
         for funcname, func in {'log': np.log1p, 'sqrt': np.sqrt}.items():
             for f in amt_cols:
                 name = f'{f}_{funcname}'
@@ -62,13 +61,30 @@ class MainAmountPairwise(Feature):
             
             self.train[f'AMT_{funcname}_mean'] = self.train[cols].mean(axis=1)
             self.test[f'AMT_{funcname}_mean'] = self.test[cols].mean(axis=1)
-        
+
+
+class MainExtRound(Feature):
+    def create_features(self):
+        self.train = pd.concat([np.round(train[ext_cols], 1).rename(columns=lambda x: x + '_r1'),
+                                np.round(train[ext_cols], 2).rename(columns=lambda x: x + '_r2')], axis=1)
+        self.test = pd.concat([np.round(test[ext_cols], 1).rename(columns=lambda x: x + '_r1'),
+                               np.round(test[ext_cols], 2).rename(columns=lambda x: x + '_r2')], axis=1)
+        # r1_cols = self.train.filter(regex='_r1$').columns
+        # r2_cols = self.train.filter(regex='_r2$').columns
+        # for i, j in list(itertools.combinations(r1_cols, 2)) + list(itertools.combinations(r2_cols, 2)):
+        #     self.train[f'{i}_add_{j}'] = self.train[i] + self.train[j]
+        #     self.train[f'{i}_sub_{j}'] = self.train[i] - self.train[j]
+        #     self.train[f'{i}_mul_{j}'] = self.train[i] * self.train[j]
+        #     self.train[f'{i}_div_{j}'] = self.train[i] / (self.train[j] + 0.1)
+        #
+        #     self.test[f'{i}_add_{j}'] = self.test[i] + self.test[j]
+        #     self.test[f'{i}_sub_{j}'] = self.test[i] - self.test[j]
+        #     self.test[f'{i}_mul_{j}'] = self.test[i] * self.test[j]
+        #     self.test[f'{i}_div_{j}'] = self.test[i] / (self.test[j] + 0.1)
+
 
 class MainExtPairwise(Feature):
     def create_features(self):
-        self.train = pd.DataFrame()
-        self.test = pd.DataFrame()
-        ext_cols = ['EXT_SOURCE_1', 'EXT_SOURCE_2', 'EXT_SOURCE_3']
         self.train[ext_cols] = train[ext_cols]
         self.test[ext_cols] = test[ext_cols]
         for i, j in itertools.combinations(ext_cols, 2):
@@ -136,6 +152,7 @@ if __name__ == '__main__':
     with timer('create dataset'):
         generate_features([
             MainCategory(),
+            MainExtRound('main'),
             MainExtNull(),
             MainDocument('main'),
             MainEnquiry('main', 'cumsum'),

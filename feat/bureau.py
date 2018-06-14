@@ -11,11 +11,6 @@ from feat import Feature, get_arguments, generate_features, SubfileFeature
 from utils import timer
 from config import *
 
-CREDIT_CAT_COLS = ['NAME_CONTRACT_STATUS']
-
-func_for_num = [np.min, np.max, np.std, np.mean]
-func_for_cat = [lambda x: np.unique(x, return_counts=True)[1]]
-
 
 class BureauActiveCount(Feature):
     def create_features(self):
