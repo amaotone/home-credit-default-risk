@@ -190,6 +190,15 @@ class PrevProductCombination(SubfileFeature):
         ], axis=1)
 
 
+class PrevNullCount(SubfileFeature):
+    def create_features(self):
+        df = prev.copy()
+        df['null_count'] = df.isnull().sum(axis=1)
+        self.df['min'] = df.groupby('SK_ID_CURR').null_count.min()
+        self.df['mean'] = df.groupby('SK_ID_CURR').null_count.mean()
+        self.df['max'] = df.groupby('SK_ID_CURR').null_count.max()
+
+
 if __name__ == '__main__':
     args = get_arguments(Path(__file__).stem)
     with timer('load dataset'):
@@ -217,6 +226,7 @@ if __name__ == '__main__':
             PrevCategoryLda('prev'),
             PrevBasic('prev', ''),
             PrevProductCombination('prev'),
-            PrevBasicAll('prev'),
-            PrevAmountPairwise('prev')
+            PrevNullCount('prev_null_count')
+            # PrevBasicAll('prev'),
+            # PrevAmountPairwise('prev')
         ], args.force)

@@ -137,6 +137,15 @@ class BureauProlonged(Feature):
         self.test = test.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')[df.columns]
 
 
+class BureauNullCount(SubfileFeature):
+    def create_features(self):
+        df = buro.copy()
+        df['null_count'] = df.isnull().sum(axis=1)
+        self.df['min'] = df.groupby('SK_ID_CURR').null_count.min()
+        self.df['mean'] = df.groupby('SK_ID_CURR').null_count.mean()
+        self.df['max'] = df.groupby('SK_ID_CURR').null_count.max()
+
+
 if __name__ == '__main__':
     args = get_arguments('POS CASH')
     with timer('load dataset'):
@@ -154,6 +163,7 @@ if __name__ == '__main__':
     
     with timer('create dataset'):
         generate_features([
+            BureauNullCount('buro_null_count'),
             BureauActiveCount(), BureauActiveAndTypeProduct(), BureauInterval(),
             BureauEnddate(), BureauAmountPairwise(), BureauProlonged(),
             BureauBasic('buro'), BureauActive('buro_active'), BureauClosed('buro_closed')

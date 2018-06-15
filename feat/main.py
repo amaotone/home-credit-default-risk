@@ -53,11 +53,18 @@ class MainAmountPairwise(Feature):
             
             cols = self.train.filter(regex=f'^AMT_(.*)_{funcname}$').columns.tolist()
             for i, j in itertools.combinations(cols, 2):
-                self.train[f'{i}_sub_{j}'] = self.train[i] - self.train[j]
-                self.train[f'{i}_div_{j}'] = self.train[i] / (self.train[j] + 0.1)
+                sub = f'{i}_sub_{j}'
+                div = f'{i}_div_{j}'
+                self.train[sub] = self.train[i] - self.train[j]
+                self.train[div] = self.train[i] / (self.train[j] + 0.1)
                 
-                self.test[f'{i}_sub_{j}'] = self.test[i] - self.test[j]
-                self.test[f'{i}_div_{j}'] = self.test[i] / (self.test[j] + 0.1)
+                self.test[sub] = self.test[i] - self.test[j]
+                self.test[div] = self.test[i] / (self.test[j] + 0.1)
+                
+                for d in ['DAYS_BIRTH', 'DAYS_EMPLOYED', 'DAYS_REGISTRATION', 'DAYS_ID_PUBLISH',
+                          'DAYS_LAST_PHONE_CHANGE']:
+                    self.train[div + '_div_' + d] = self.train[div] / (abs(train[d]) + 0.1)
+                    self.test[div + '_div_' + d] = self.test[div] / (abs(test[d]) + 0.1)
             
             self.train[f'AMT_{funcname}_mean'] = self.train[cols].mean(axis=1)
             self.test[f'AMT_{funcname}_mean'] = self.test[cols].mean(axis=1)
@@ -81,6 +88,14 @@ class MainExtRound(Feature):
         #     self.test[f'{i}_sub_{j}'] = self.test[i] - self.test[j]
         #     self.test[f'{i}_mul_{j}'] = self.test[i] * self.test[j]
         #     self.test[f'{i}_div_{j}'] = self.test[i] / (self.test[j] + 0.1)
+
+
+class MainFlagCount(Feature):
+    def create_features(self):
+        self.train['zero_count'] = (train.filter(regex='(FLAG_|REG_|LIVE_|_AVG|_MODE|_MEDI)') == 0).sum(axis=1)
+        self.test['zero_count'] = (test.filter(regex='(FLAG_|REG_|LIVE_|_AVG|_MODE|_MEDI)') == 0).sum(axis=1)
+        self.train['one_count'] = (train.filter(regex='(FLAG_|REG_|LIVE_|_AVG|_MODE|_MEDI)') == 1).sum(axis=1)
+        self.test['one_count'] = (test.filter(regex='(FLAG_|REG_|LIVE_|_AVG|_MODE|_MEDI)') == 1).sum(axis=1)
 
 
 class MainExtPairwise(Feature):
@@ -144,8 +159,8 @@ if __name__ == '__main__':
         test = pd.read_feather(TEST)
     
     with timer('preprocessing'):
-        train.replace({'XAP': np.nan, 'XAN': np.nan}, inplace=True)
-        test.replace({'XAP': np.nan, 'XAN': np.nan}, inplace=True)
+        train.replace({'Yes': 1, 'No': 0, 'Y': 1, 'N': 0, 'M': 1, 'F': 0, 'XAP': np.nan, 'XAN': np.nan}, inplace=True)
+        test.replace({'Yes': 1, 'No': 0, 'Y': 1, 'N': 0, 'M': 1, 'F': 0, 'XAP': np.nan, 'XAN': np.nan}, inplace=True)
         train.filter(regex='DAYS_').replace(365243, np.nan, inplace=True)
         test.filter(regex='DAYS_').replace(365243, np.nan, inplace=True)
     
@@ -154,6 +169,7 @@ if __name__ == '__main__':
             MainCategory(),
             MainExtRound('main'),
             MainExtNull(),
+            MainFlagCount('main'),
             MainDocument('main'),
             MainEnquiry('main', 'cumsum'),
             MainAmountPairwise('main'),

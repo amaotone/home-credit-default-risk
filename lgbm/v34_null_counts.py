@@ -22,12 +22,13 @@ print(NAME)
 
 feats = [
     'main_numeric', 'main_amount_pairwise', 'main_category', 'main_ext_null', 'main_ext_pairwise', 'bureau', 'pos',
-    # 'pos_latest', 'credit_latest',
+    'pos_latest', 'credit_latest',
     'bureau_active_count', 'bureau_enddate', 'bureau_amount_pairwise', 'bureau_prolonged',
     'prev_basic', 'prev_category_count', 'prev_category_tfidf', 'prev_product_combination',
     'main_document', 'main_enquiry', 'main_day_pairwise', 'main_amount_per_person', 'main_ext_round',
     'inst_basic_direct', 'inst_basic_via_prev', 'inst_latest', 'inst_ewm', 'inst_basic_direct', 'inst_basic_via_prev',
-    'credit_basic_direct', 'credit_basic_via_prev', 'credit_drawing', 'credit_amount_negative_count'
+    'credit_basic_direct', 'credit_basic_via_prev', 'credit_drawing', 'credit_amount_negative_count',
+    'credit_null_count', 'pos_null_count', 'bureau_null_count', 'inst_null_count', 'prev_null_count',
 ]
 
 lgb_params = {
@@ -130,7 +131,7 @@ with timer('output results'):
     val_df = pd.DataFrame({'TARGET': y_train, 'p': val_series}).to_csv(RESULT_DIR / f'{NAME}_cv_pred.csv', index=False)
     
     pred = test_df.mean(axis=1).ravel()
-    generate_submit(pred, f'{valid_score:.5f}', RESULT_DIR)
+    generate_submit(pred, f'{NAME}_{valid_score:.5f}', RESULT_DIR)
     
     print('output feature importances')
     feat_df.mean(axis=1).sort_values(ascending=False).to_csv(RESULT_DIR / 'feats.csv')

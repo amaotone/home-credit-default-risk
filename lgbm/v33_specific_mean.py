@@ -22,6 +22,7 @@ print(NAME)
 
 feats = [
     'main_numeric', 'main_amount_pairwise', 'main_category', 'main_ext_null', 'main_ext_pairwise', 'bureau', 'pos',
+    'credit', 'prev',
     # 'pos_latest', 'credit_latest',
     'bureau_active_count', 'bureau_enddate', 'bureau_amount_pairwise', 'bureau_prolonged',
     'prev_basic', 'prev_category_count', 'prev_category_tfidf', 'prev_product_combination',
@@ -29,6 +30,8 @@ feats = [
     'inst_basic_direct', 'inst_basic_via_prev', 'inst_latest', 'inst_ewm', 'inst_basic_direct', 'inst_basic_via_prev',
     'credit_basic_direct', 'credit_basic_via_prev', 'credit_drawing', 'credit_amount_negative_count'
 ]
+specific_mean = True
+drop_importance_threshold = 0.1
 
 lgb_params = {
     'n_estimators': 4000,
@@ -61,7 +64,7 @@ with timer('load datasets'):
 with timer('drop low importance feats'):
     ref = pd.read_csv('/home/ubuntu/kaggle-home-credit/output/180615_014745_v32_credit_drawing/feats.csv', index_col=0,
                       header=None)
-    drop_cols = ref[1][ref[1] < 1].index
+    drop_cols = ref[1][ref[1] < drop_importance_threshold].index
     drop_cols = drop_cols[drop_cols.isin(X_train.columns)]
     X_train.drop(drop_cols, axis=1, inplace=True)
     X_test.drop(drop_cols, axis=1, inplace=True)
@@ -129,7 +132,15 @@ with timer('output results'):
     
     val_df = pd.DataFrame({'TARGET': y_train, 'p': val_series}).to_csv(RESULT_DIR / f'{NAME}_cv_pred.csv', index=False)
     
-    pred = test_df.mean(axis=1).ravel()
+    
+    def calc_specific_mean(series):
+        return np.mean(sorted(series)[1:-1])
+    
+    
+    if specific_mean:
+        pred = test_df.apply(calc_specific_mean, axis=1).ravel()
+    else:
+        pred = test_df.mean(axis=1).ravel()
     generate_submit(pred, f'{valid_score:.5f}', RESULT_DIR)
     
     print('output feature importances')

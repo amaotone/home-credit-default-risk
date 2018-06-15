@@ -44,31 +44,50 @@ class CreditBasicViaPrev(SubfileFeature):
 class CreditDrawing(SubfileFeature):
     def create_features(self):
         g = card.groupby('SK_ID_CURR')
-        drawing_cols = ['AMT_DRAWINGS_ATM_CURRENT', 'AMT_DRAWINGS_CURRENT', 'AMT_DRAWINGS_OTHER_CURRENT',
+        drawing_amount_cols = ['AMT_DRAWINGS_ATM_CURRENT', 'AMT_DRAWINGS_CURRENT', 'AMT_DRAWINGS_OTHER_CURRENT',
                         'AMT_DRAWINGS_POS_CURRENT']
+        drawing_count_cols = ['CNT_DRAWINGS_ATM_CURRENT', 'CNT_DRAWINGS_CURRENT', 'CNT_DRAWINGS_OTHER_CURRENT',
+                              'CNT_DRAWINGS_POS_CURRENT', 'CNT_INSTALMENT_MATURE_CUM']
         df = pd.DataFrame()
         # longest streak
-        for f in tqdm(drawing_cols):
+        for f in tqdm(drawing_amount_cols):
             self.df[f + '_longest_streak'] = g[f].apply(longest_streak)
         self.df['longest_streak_min'] = self.df.filter(regex='_longest_streak$').min(axis=1)
         self.df['longest_streak_mean'] = self.df.filter(regex='_longest_streak$').mean(axis=1)
         self.df['longest_streak_max'] = self.df.filter(regex='_longest_streak$').max(axis=1)
-        self.df['longest_streak_sum'] = self.df.filter(regex='_longest_streak$').sum(axis=1)
         
         # nonzero ratio
-        for f in tqdm(drawing_cols):
+        for f in tqdm(drawing_amount_cols):
             df[f + '_nonzero_ratio'] = g[f].apply(nonzero_ratio)
         self.df['nonzero_ratio_min'] = self.df.filter(regex='_nonzero_ratio$').min(axis=1)
         self.df['nonzero_ratio_mean'] = self.df.filter(regex='_nonzero_ratio$').mean(axis=1)
         self.df['nonzero_ratio_max'] = self.df.filter(regex='_nonzero_ratio$').max(axis=1)
-        self.df['nonzero_ratio_sum'] = self.df.filter(regex='_nonzero_ratio$').sum(axis=1)
+        
+        # increase count
+        g = card.groupby('SK_ID_PREV')
+        for f in tqdm(drawing_count_cols):
+            name = f + '_increase_count'
+            df[name] = g[f].apply(lambda x: (x > x.shift(1)).sum())
+            
+            
+            
+            
 
 
 class CreditAmountNegativeCount(SubfileFeature):
     def create_features(self):
-        cols = [f for f in card.columns if f.startwith('AMT_') and card[f].isnull().sum() > 0]
+        cols = [f for f in card.columns if f.startswith('AMT_') and card[f].isnull().sum() > 0]
         for f in cols:
-            self.df[f] = card.groupby('SK_ID_CURR')[f].isnull().sum()
+            self.df[f] = card.groupby('SK_ID_CURR')[f].apply(lambda x: x.isnull().sum())
+
+
+class CreditNullCount(SubfileFeature):
+    def create_features(self):
+        df = card.copy()
+        df['null_count'] = df.isnull().sum(axis=1)
+        self.df['min'] = df.groupby('SK_ID_CURR').null_count.min()
+        self.df['mean'] = df.groupby('SK_ID_CURR').null_count.mean()
+        self.df['max'] = df.groupby('SK_ID_CURR').null_count.max()
 
 
 if __name__ == '__main__':
@@ -91,4 +110,5 @@ if __name__ == '__main__':
             CreditBasicViaPrev('credit', 'via_prev'),
             CreditDrawing('credit_drawing'),
             CreditAmountNegativeCount('credit', 'negative_count'),
+            CreditNullCount('credit_null_count')
         ], args.force)

@@ -30,6 +30,14 @@ class InstEwm(SubfileFeature):
             self.df[f] = inst.groupby('SK_ID_CURR')[f].apply(lambda x: float(x.ewm(com=0.5).mean().tail(1).values))
 
 
+class InstNullCount(SubfileFeature):
+    def create_features(self):
+        df = inst.copy()
+        df['null_count'] = df.isnull().sum(axis=1)
+        self.df['min'] = df.groupby('SK_ID_CURR').null_count.min()
+        self.df['mean'] = df.groupby('SK_ID_CURR').null_count.mean()
+        self.df['max'] = df.groupby('SK_ID_CURR').null_count.max()
+
 class InstBasicDirect(SubfileFeature):
     def create_features(self):
         df = inst.drop('SK_ID_PREV', axis=1)
@@ -94,6 +102,7 @@ if __name__ == '__main__':
     
     with timer('create dataset'):
         generate_features([
+            InstNullCount('inst_null_count'),
             InstBasicDirect('inst'),
             InstBasicViaPrev('inst', 'via_prev'),
             InstLatest(),
