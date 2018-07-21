@@ -3,27 +3,39 @@ import os
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+sys.path.append('../../spica')
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import TfidfTransformer
 from tqdm import tqdm
 
-from feat import SubfileFeature, get_arguments, generate_features
+from feat import SubfileFeature
 from utils import timer
 from config import *
+from spica.features.base import Feature, get_arguments, generate_features
+
+Feature.dir = '../working'
+SubfileFeature.dir = '../working'
 
 
-class PrevLatest(SubfileFeature):
-    def create_features(self):
-        self.df = prev.groupby('SK_ID_CURR').last()
+class PrevFeature(SubfileFeature):
+    prefix = 'prev'
 
 
-class PrevLastApproved(SubfileFeature):
-    def create_features(self):
-        self.df = prev.query("NAME_CONTRACT_STATUS=='Approved'").groupby('SK_ID_CURR').last() \
-            .drop(['NAME_CONTRACT_STATUS', 'CODE_REJECT_REASON'], axis=1)
+# class PrevLatest(PrevFeature):
+#     suffix = 'latest'
+#
+#     def create_features(self):
+#         self.df = prev.groupby('SK_ID_CURR').last()
+
+#
+# class PrevLastApproved(PrevFeature):
+#     suffix = 'last_approved'
+#
+#     def create_features(self):
+#         self.df = prev.query("NAME_CONTRACT_STATUS=='Approved'").groupby('SK_ID_CURR').last() \
+#             .drop(['NAME_CONTRACT_STATUS', 'CODE_REJECT_REASON'], axis=1)
 
 
 # class PrevBasicAll(SubfileFeature):
@@ -91,7 +103,7 @@ class PrevLastApproved(SubfileFeature):
 #         ], axis=1)
 
 
-class PrevCategoryCount(SubfileFeature):
+class PrevCategoryCount(PrevFeature):
     def create_features(self):
         dfs = []
         for f in tqdm(prev.select_dtypes(['object']).columns):
@@ -107,7 +119,7 @@ class PrevCategoryCount(SubfileFeature):
         self.df = pd.concat(dfs, axis=1)
 
 
-class PrevCategoryTfidf(SubfileFeature):
+class PrevCategoryTfidf(PrevFeature):
     def create_features(self):
         dfs = []
         tfidf_transformer = TfidfTransformer()
@@ -120,23 +132,23 @@ class PrevCategoryTfidf(SubfileFeature):
         self.df = pd.concat(dfs, axis=1)
 
 
-class PrevCategoryLda(SubfileFeature):
-    def create_features(self):
-        dfs = []
-        n_components = 2
-        lda = LatentDirichletAllocation(
-            n_components=n_components, learning_method='online', n_jobs=-1, random_state=71,
-            batch_size=256, max_iter=5
-        )
-        for f in tqdm(prev.select_dtypes(['object']).columns):
-            count = prev.groupby('SK_ID_CURR')[f].value_counts().unstack().fillna(0).astype(int)
-            df = pd.DataFrame(lda.fit_transform(count), index=count.index,
-                              columns=[f'{f}_lda_{i}' for i in range(n_components)])
-            dfs.append(df)
-        self.df = pd.concat(dfs, axis=1)
+# class PrevCategoryLda(PrevFeature):
+#     def create_features(self):
+#         dfs = []
+#         n_components = 2
+#         lda = LatentDirichletAllocation(
+#             n_components=n_components, learning_method='online', n_jobs=-1, random_state=71,
+#             batch_size=256, max_iter=5
+#         )
+#         for f in tqdm(prev.select_dtypes(['object']).columns):
+#             count = prev.groupby('SK_ID_CURR')[f].value_counts().unstack().fillna(0).astype(int)
+#             df = pd.DataFrame(lda.fit_transform(count), index=count.index,
+#                               columns=[f'{f}_lda_{i}' for i in range(n_components)])
+#             dfs.append(df)
+#         self.df = pd.concat(dfs, axis=1)
 
 
-class PrevBasic(SubfileFeature):
+class PrevBasic(PrevFeature):
     def create_features(self):
         df = prev.query('NAME_CONTRACT_STATUS == "Approved"').copy()
         
@@ -164,33 +176,35 @@ class PrevBasic(SubfileFeature):
         self.df = pd.concat([min_df, mean_df, max_df], axis=1)
 
 
-class PrevProductCombination(SubfileFeature):
-    def create_features(self):
-        df = prev[['SK_ID_CURR']].copy()
-        mapping = {
-            'interest': 'with interest',
-            'pos': 'POS',
-            'cash': 'Cash',
-            'card': 'Card',
-            'mobile': 'mobile',
-            'household': 'household',
-            'industry': 'industry',
-            'x_sell': 'X-Sell',
-            'street': 'Street',
-            'low': 'low',
-            'middle': 'middle',
-            'high': 'high'
-        }
-        for k, v in mapping.items():
-            df[k] = prev.PRODUCT_COMBINATION.str.contains(v).fillna(False).astype(int)
-        self.df = pd.concat([
-            df.groupby('SK_ID_CURR').min().rename(columns=lambda x: x + '_min'),
-            df.groupby('SK_ID_CURR').mean().rename(columns=lambda x: x + '_mean'),
-            df.groupby('SK_ID_CURR').max().rename(columns=lambda x: x + '_max')
-        ], axis=1)
+# class PrevProductCombination(PrevFeature):
+#     def create_features(self):
+#         df = prev[['SK_ID_CURR']].copy()
+#         mapping = {
+#             'interest': 'with interest',
+#             'pos': 'POS',
+#             'cash': 'Cash',
+#             'card': 'Card',
+#             'mobile': 'mobile',
+#             'household': 'household',
+#             'industry': 'industry',
+#             'x_sell': 'X-Sell',
+#             'street': 'Street',
+#             'low': 'low',
+#             'middle': 'middle',
+#             'high': 'high'
+#         }
+#         for k, v in mapping.items():
+#             df[k] = prev.PRODUCT_COMBINATION.str.contains(v).fillna(False).astype(int)
+#         self.df = pd.concat([
+#             df.groupby('SK_ID_CURR').min().rename(columns=lambda x: x + '_min'),
+#             df.groupby('SK_ID_CURR').mean().rename(columns=lambda x: x + '_mean'),
+#             df.groupby('SK_ID_CURR').max().rename(columns=lambda x: x + '_max')
+#         ], axis=1)
 
 
-class PrevNullCount(SubfileFeature):
+class PrevNullCount(PrevFeature):
+    prefix = 'prev_null_count'
+    
     def create_features(self):
         df = prev.copy()
         df['null_count'] = df.isnull().sum(axis=1)
@@ -199,18 +213,41 @@ class PrevNullCount(SubfileFeature):
         self.df['max'] = df.groupby('SK_ID_CURR').null_count.max()
 
 
+class PrevAmountToMain(Feature):
+    prefix = 'prev'
+    
+    def create_features(self):
+        main_cols = ['AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE']
+        prev_cols = ['AMT_ANNUITY', 'AMT_APPLICATION', 'AMT_CREDIT', 'AMT_GOODS_PRICE']
+        g = prev[['SK_ID_CURR'] + prev_cols].groupby('SK_ID_CURR')
+        prev_df = pd.concat([
+            g.max().rename(columns=lambda x: x + '_max'),
+            g.mean().rename(columns=lambda x: x + '_mean')
+        ], axis=1)
+        trn = train.merge(prev_df, left_on='SK_ID_CURR', right_index=True, how='left')
+        tst = test.merge(prev_df, left_on='SK_ID_CURR', right_index=True, how='left')
+        for m, p in itertools.product(main_cols, prev_cols):
+            self.train[f'{m}_sub_{p}_max'] = trn[m] - trn[p + '_max']
+            self.train[f'{m}_sub_{p}_mean'] = trn[m] - trn[p + '_mean']
+            self.test[f'{m}_sub_{p}_max'] = tst[m] - tst[p + '_max']
+            self.test[f'{m}_sub_{p}_mean'] = tst[m] - tst[p + '_mean']
+            
+            self.train[f'{m}_div_{p}_max'] = trn[m] / trn[p + '_max']
+            self.train[f'{m}_div_{p}_mean'] = trn[m] / trn[p + '_mean']
+            self.test[f'{m}_div_{p}_max'] = tst[m] / tst[p + '_max']
+            self.test[f'{m}_div_{p}_mean'] = tst[m] / tst[p + '_mean']
+
+
 if __name__ == '__main__':
     args = get_arguments(Path(__file__).stem)
     with timer('load dataset'):
-        train = pd.read_feather(TRAIN)[['SK_ID_CURR']]
-        test = pd.read_feather(TEST)[['SK_ID_CURR']]
+        train = pd.read_feather(TRAIN)
+        test = pd.read_feather(TEST)
         prev = pd.read_feather(PREV)
     
     with timer('preprocessing'):
         prev.drop(['SK_ID_PREV', 'RATE_INTEREST_PRIMARY', 'RATE_INTEREST_PRIVILEGED'], axis=1, inplace=True)
         prev = prev.sort_values(['SK_ID_CURR', 'DAYS_DECISION']).reset_index(drop=True)
-        # prev.loc[:, prev.columns.str.startswith('AMT_')] = np.log1p(prev.filter(regex='^AMT_'))
-        # prev.replace({'XNA': np.nan, 'XAP': np.nan}, inplace=True)
         prev.loc[:, prev.columns.str.startswith('DAYS_')] = prev.filter(regex='^DAYS_').replace({365243: np.nan})
         prev.AMT_DOWN_PAYMENT.fillna(0)
         prev.RATE_DOWN_PAYMENT.fillna(0)
@@ -218,15 +255,4 @@ if __name__ == '__main__':
         prev[cat_cols] = prev[cat_cols].fillna('NaN')
     
     with timer('create dataset'):
-        generate_features([
-            PrevLatest('prev', 'latest'),
-            PrevLastApproved('prev', 'last_approved'),
-            PrevCategoryCount('prev', ''),
-            PrevCategoryTfidf('prev'),
-            PrevCategoryLda('prev'),
-            PrevBasic('prev', ''),
-            PrevProductCombination('prev'),
-            PrevNullCount('prev_null_count')
-            # PrevBasicAll('prev'),
-            # PrevAmountPairwise('prev')
-        ], args.force)
+        generate_features(globals(), args.force)

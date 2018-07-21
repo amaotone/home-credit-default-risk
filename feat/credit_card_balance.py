@@ -45,7 +45,7 @@ class CreditDrawing(SubfileFeature):
     def create_features(self):
         g = card.groupby('SK_ID_CURR')
         drawing_amount_cols = ['AMT_DRAWINGS_ATM_CURRENT', 'AMT_DRAWINGS_CURRENT', 'AMT_DRAWINGS_OTHER_CURRENT',
-                        'AMT_DRAWINGS_POS_CURRENT']
+                               'AMT_DRAWINGS_POS_CURRENT']
         drawing_count_cols = ['CNT_DRAWINGS_ATM_CURRENT', 'CNT_DRAWINGS_CURRENT', 'CNT_DRAWINGS_OTHER_CURRENT',
                               'CNT_DRAWINGS_POS_CURRENT', 'CNT_INSTALMENT_MATURE_CUM']
         df = pd.DataFrame()
@@ -68,10 +68,6 @@ class CreditDrawing(SubfileFeature):
         for f in tqdm(drawing_count_cols):
             name = f + '_increase_count'
             df[name] = g[f].apply(lambda x: (x > x.shift(1)).sum())
-            
-            
-            
-            
 
 
 class CreditAmountNegativeCount(SubfileFeature):
@@ -88,6 +84,25 @@ class CreditNullCount(SubfileFeature):
         self.df['min'] = df.groupby('SK_ID_CURR').null_count.min()
         self.df['mean'] = df.groupby('SK_ID_CURR').null_count.mean()
         self.df['max'] = df.groupby('SK_ID_CURR').null_count.max()
+
+
+class CreditFirstDelayIndex(SubfileFeature):
+    def create_features(self):
+        def first_nonzero(x):
+            t = np.nonzero(x)[0]
+            return 0 if len(t) == 0 else t[0] + 1
+        
+        g = card.groupby('SK_ID_PREV')
+        df = pd.DataFrame()
+        df['SK_ID_CURR'] = g.SK_ID_CURR.max()
+        df['first_nonzero_SK_DPD'] = g.SK_DPD.apply(first_nonzero)
+        df['first_nonzero_SK_DPD_DEF'] = g.SK_DPD_DEF.apply(first_nonzero)
+        df['first_nonzero_diff'] = df.first_nonzero_SK_DPD_DEF - df.first_nonzero_SK_DPD
+        g = df.reset_index(drop=True).groupby('SK_ID_CURR')
+        self.df = pd.concat([
+            g.mean().rename(columns=lambda x: x + '_mean'),
+            g.max().rename(columns=lambda x: x + '_max'),
+        ], axis=1)
 
 
 if __name__ == '__main__':
@@ -110,5 +125,6 @@ if __name__ == '__main__':
             CreditBasicViaPrev('credit', 'via_prev'),
             CreditDrawing('credit_drawing'),
             CreditAmountNegativeCount('credit', 'negative_count'),
-            CreditNullCount('credit_null_count')
+            CreditNullCount('credit_null_count'),
+            CreditFirstDelayIndex('credit')
         ], args.force)

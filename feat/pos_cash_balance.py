@@ -19,6 +19,7 @@ class PosNullCount(SubfileFeature):
         self.df['mean'] = df.groupby('SK_ID_CURR').null_count.mean()
         self.df['max'] = df.groupby('SK_ID_CURR').null_count.max()
 
+
 class PosLatest(Feature):
     def create_features(self):
         df = pos.groupby('SK_ID_CURR').last().drop('SK_ID_PREV', axis=1)
@@ -47,6 +48,45 @@ class PosDecay(SubfileFeature):
         ], axis=1)
 
 
+class PosMonthDuplicate(SubfileFeature):
+    def create_features(self):
+        df = pos[['SK_ID_CURR', 'MONTHS_BALANCE']].copy()
+        df['dup'] = df.duplicated()
+        self.df['months_duplicated_sum'] = df.groupby('SK_ID_CURR').dup.sum()
+        self.df['months_duplicated_mean'] = df.groupby('SK_ID_CURR').dup.mean()
+
+
+class PosCompleteDecay(SubfileFeature):
+    def create_features(self):
+        df = pos[['SK_ID_CURR', 'MONTHS_BALANCE', 'NAME_CONTRACT_STATUS']].copy()
+        df['is_complete'] = (df.NAME_CONTRACT_STATUS == 'Completed').astype(int)
+        for i in [0.8, 0.9, 0.95, 0.99, 1]:
+            df['completed_decay_' + str(i * 100)] = i ** (-df.MONTHS_BALANCE) * df['is_complete']
+        df.drop(['MONTHS_BALANCE', 'NAME_CONTRACT_STATUS', 'is_complete'], axis=1, inplace=True)
+        self.df = pd.concat([
+            df.groupby('SK_ID_CURR').mean().rename(columns=lambda x: x + '_mean'),
+            df.groupby('SK_ID_CURR').sum().rename(columns=lambda x: x + '_sum'),
+        ], axis=1)
+
+class PosFirstDelayIndex(SubfileFeature):
+    def create_features(self):
+        def first_nonzero(x):
+            t = np.nonzero(x)[0]
+            return 0 if len(t)==0 else t[0]+1
+        
+        g = pos.groupby('SK_ID_PREV')
+        df = pd.DataFrame()
+        df['SK_ID_CURR'] = g.SK_ID_CURR.max()
+        df['first_nonzero_SK_DPD'] = g.SK_DPD.apply(first_nonzero)
+        df['first_nonzero_SK_DPD_DEF'] = g.SK_DPD_DEF.apply(first_nonzero)
+        df['first_nonzero_diff'] = df.first_nonzero_SK_DPD_DEF - df.first_nonzero_SK_DPD
+        g = df.reset_index(drop=True).groupby('SK_ID_CURR')
+        self.df = pd.concat([
+            g.mean().rename(columns=lambda x: x+'_mean'),
+            g.max().rename(columns=lambda x: x+'_max'),
+        ], axis=1)
+
+
 if __name__ == '__main__':
     args = get_arguments('POS CASH')
     with timer('load dataset'):
@@ -63,5 +103,8 @@ if __name__ == '__main__':
             PosNullCount('pos_null_count'),
             PosLatest('pos', 'latest'),
             PosCount(),
-            PosDecay('pos')
+            PosDecay('pos'),
+            PosMonthDuplicate('pos'),
+            PosCompleteDecay('pos'),
+            PosFirstDelayIndex('pos')
         ], args.force)

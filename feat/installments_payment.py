@@ -38,6 +38,7 @@ class InstNullCount(SubfileFeature):
         self.df['mean'] = df.groupby('SK_ID_CURR').null_count.mean()
         self.df['max'] = df.groupby('SK_ID_CURR').null_count.max()
 
+
 class InstBasicDirect(SubfileFeature):
     def create_features(self):
         df = inst.drop('SK_ID_PREV', axis=1)
@@ -82,10 +83,6 @@ class InstBasicViaPrev(SubfileFeature):
         via.columns = ['_'.join(f) if f[0] != 'SK_ID_CURR' else f[0] for f in via.columns]
         self.df = via.groupby('SK_ID_CURR').mean()
 
-
-# class InstBasic(SubfileFeature):
-#     inst_ = inst.copy()
-#
 
 if __name__ == '__main__':
     args = get_arguments('POS CASH')

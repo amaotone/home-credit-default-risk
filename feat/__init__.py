@@ -1,13 +1,14 @@
 import argparse
 import os
-import re
 import sys
 
 import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append('../../spica')
 from utils import timer
 from config import *
+from spica.features.base import Feature
 
 
 def get_arguments(description):
@@ -24,47 +25,48 @@ def generate_features(features, overwrite):
             f.run().save()
 
 
-class Feature(object):
-    def __init__(self, prefix=None, suffix=None):
-        self.prefix = prefix + '_' if prefix else ''
-        self.suffix = '_' + suffix if suffix else ''
-        self.name = re.sub("([A-Z])", lambda x: "_" + x.group(1).lower(), self.__class__.__name__).lstrip('_')
-        self.train = pd.DataFrame()
-        self.test = pd.DataFrame()
-        self.train_path = WORKING / f'{self.name}_train.ftr'
-        self.test_path = WORKING / f'{self.name}_test.ftr'
-    
-    @property
-    def categorical_features(self):
-        return []
-    
-    def run(self):
-        with timer(self.name):
-            self.create_features()
-            # if self.categorical_features:
-            #     self.train.loc[:, self.categorical_features] = self.train.loc[:, self.categorical_features].astype(
-            # str)
-            #     self.test.loc[:, self.categorical_features] = self.test.loc[:, self.categorical_features].astype(str)
-            self.train.columns = self.prefix + self.train.columns.str.replace('\s+', '_') + self.suffix
-            self.test.columns = self.prefix + self.test.columns.str.replace('\s+', '_') + self.suffix
-        return self
-    
-    def create_features(self):
-        raise NotImplementedError
-    
-    def save(self):
-        self.train.to_feather(self.train_path)
-        self.test.to_feather(self.test_path)
-    
-    def load(self):
-        self.train = pd.read_feather(self.train_path)
-        self.test = pd.read_feather(self.test_path)
+# class Feature(object):
+#     def __init__(self, prefix=None, suffix=None):
+#         self.prefix = prefix + '_' if prefix else ''
+#         self.suffix = '_' + suffix if suffix else ''
+#         self.name = re.sub("([A-Z])", lambda x: "_" + x.group(1).lower(), self.__class__.__name__).lstrip('_')
+#         self.train = pd.DataFrame()
+#         self.test = pd.DataFrame()
+#         self.train_path = WORKING / f'{self.name}_train.ftr'
+#         self.test_path = WORKING / f'{self.name}_test.ftr'
+#
+#     @property
+#     def categorical_features(self):
+#         return []
+#
+#     def run(self):
+#         with timer(self.name):
+#             self.create_features()
+#             # if self.categorical_features:
+#             #     self.train.loc[:, self.categorical_features] = self.train.loc[:, self.categorical_features].astype(
+#             # str)
+#             #     self.test.loc[:, self.categorical_features] = self.test.loc[:, self.categorical_features].astype(
+# str)
+#             self.train.columns = self.prefix + self.train.columns.str.replace('\s+', '_') + self.suffix
+#             self.test.columns = self.prefix + self.test.columns.str.replace('\s+', '_') + self.suffix
+#         return self
+#
+#     def create_features(self):
+#         raise NotImplementedError
+#
+#     def save(self):
+#         self.train.to_feather(self.train_path)
+#         self.test.to_feather(self.test_path)
+#
+#     def load(self):
+#         self.train = pd.read_feather(self.train_path)
+#         self.test = pd.read_feather(self.test_path)
 
 
 class SubfileFeature(Feature):
-    def __init__(self, prefix=None, suffix=None):
+    def __init__(self):
         self.df = pd.DataFrame()
-        super().__init__(prefix, suffix)
+        super().__init__()
     
     def run(self):
         with timer(self.name):
@@ -76,3 +78,13 @@ class SubfileFeature(Feature):
             self.train.columns = self.prefix + self.train.columns.str.replace('\s+', '_') + self.suffix
             self.test.columns = self.prefix + self.test.columns.str.replace('\s+', '_') + self.suffix
         return self
+
+# class MainFileFeature(Feature, metaclass=ABCMeta):
+#     prefix = 'main'
+#
+#     def create_features(self):
+#         self.train = self.feature_impl(train)
+#         self.test = self.feature_impl(test)
+#
+#     def feature_impl(self, df):
+#         raise NotImplementedError
