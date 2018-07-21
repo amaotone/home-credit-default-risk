@@ -29,6 +29,11 @@ pd.read_csv('../input/installments_payments.csv.zip') \
     .sort_values(['SK_ID_CURR', 'DAYS_INSTALMENT']).reset_index(drop=True) \
     .to_feather('../input/installments_payments.ftr')
 
+print('pos_cash')
+pd.read_csv('../input/POS_CASH_balance.csv.zip') \
+    .sort_values(['SK_ID_CURR', 'MONTHS_BALANCE']).reset_index(drop=True) \
+    .to_feather('../input/POS_CASH_balance.ftr')
+
 print('indices')
 pd.read_feather('../input/application_train.ftr')[['SK_ID_CURR']].to_feather('../input/train_idx.ftr')
 pd.read_feather('../input/application_test.ftr')[['SK_ID_CURR']].to_feather('../input/test_idx.ftr')
