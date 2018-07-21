@@ -5,6 +5,8 @@ PROJECT_PATH = Path(__file__).parent
 INPUT = PROJECT_PATH / 'input'
 OUTPUT = PROJECT_PATH / 'output'
 WORKING = PROJECT_PATH / 'working'
+CONFIG = PROJECT_PATH / 'configs'
+RESULT = PROJECT_PATH / 'results'
 DROPBOX = Path().home() / 'Dropbox/kaggle'
 
 # datasets

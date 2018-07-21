@@ -64,7 +64,7 @@ def generate_submit(p, name, dir=None):
     sub = pd.read_feather(INPUT / 'sample_submission.ftr')
     sub.TARGET = p
     dir = dir or OUTPUT
-    filename = dir / f"{time.strftime('%y%m%d_%H%M%S')}_{name}.csv.gz"
+    filename = dir / f"{name}.csv.gz"
     print(f'output {filename}')
     sub.to_csv(filename, index=None, compression='gzip')
 

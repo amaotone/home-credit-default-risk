@@ -23,14 +23,12 @@ Feature.prefix = 'main'
 class MainCategory(Feature):
     def create_features(self):
         self.train = train.filter(regex='(NAME_|_TYPE)')
-        self.train.columns = 'main_' + self.train.columns
+        self.train.columns = self.train.columns
         self.test = test.filter(regex='(NAME_|_TYPE)')
-        self.test.columns = 'main_' + self.test.columns
+        self.test.columns = self.test.columns
 
 
 class MainDayPairwise(Feature):
-    prefix = 'main'
-    
     def create_features(self):
         day_cols = ['DAYS_BIRTH', 'DAYS_EMPLOYED', 'DAYS_REGISTRATION', 'DAYS_ID_PUBLISH', 'OWN_CAR_AGE']
         # 欠損処理してない
@@ -43,8 +41,6 @@ class MainDayPairwise(Feature):
 
 
 class MainAmountPerPerson(Feature):
-    prefix = 'main'
-    
     def create_features(self):
         # 欠損処理してない
         for person, amt in itertools.product(person_cols, amt_cols):
@@ -53,31 +49,23 @@ class MainAmountPerPerson(Feature):
 
 
 class MainAmountPairwise(Feature):
-    prefix = 'main'
-    
     def create_features(self):
-        for funcname, func in {'log': np.log1p}.items():
-            for f in amt_cols:
-                self.train[f] = func(train[f])
-                self.test[f] = func(test[f])
-            for i, j in itertools.combinations(amt_cols, 2):
-                sub = f'{i}_sub_{j}'
-                div = f'{i}_div_{j}'
-                self.train[sub] = self.train[i] - self.train[j]
-                self.train[div] = self.train[i] / (self.train[j] + 0.1)
-                
-                self.test[sub] = self.test[i] - self.test[j]
-                self.test[div] = self.test[i] / (self.test[j] + 0.1)
-                
-                for d in ['DAYS_BIRTH', 'DAYS_EMPLOYED', 'DAYS_REGISTRATION', 'DAYS_ID_PUBLISH',
-                          'DAYS_LAST_PHONE_CHANGE']:
-                    self.train[div + '_div_' + d] = self.train[div] / (abs(train[d]) + 0.1)
-                    self.test[div + '_div_' + d] = self.test[div] / (abs(test[d]) + 0.1)
+        for i, j in itertools.combinations(amt_cols, 2):
+            sub = f'{i}_sub_{j}'
+            div = f'{i}_div_{j}'
+            self.train[sub] = train[i] - train[j]
+            self.train[div] = train[i] / (train[j] + 0.1)
+            
+            self.test[sub] = test[i] - test[j]
+            self.test[div] = test[i] / (test[j] + 0.1)
+            
+            for d in ['DAYS_BIRTH', 'DAYS_EMPLOYED', 'DAYS_REGISTRATION', 'DAYS_ID_PUBLISH',
+                      'DAYS_LAST_PHONE_CHANGE']:
+                self.train[div + '_div_' + d] = self.train[div] / (abs(train[d]) + 0.1)
+                self.test[div + '_div_' + d] = self.test[div] / (abs(test[d]) + 0.1)
 
 
 class MainFlagCount(Feature):
-    prefix = 'main'
-    
     def create_features(self):
         self.train['zero_count'] = (train.filter(regex='(FLAG_|REG_|LIVE_|_AVG|_MODE|_MEDI)') == 0).sum(axis=1)
         self.test['zero_count'] = (test.filter(regex='(FLAG_|REG_|LIVE_|_AVG|_MODE|_MEDI)') == 0).sum(axis=1)
@@ -86,26 +74,28 @@ class MainFlagCount(Feature):
 
 
 class MainExtPairwise(Feature):
-    prefix = 'main'
-    
     def create_features(self):
-        self.train[ext_cols] = train[ext_cols]
-        self.test[ext_cols] = test[ext_cols]
+        self.train[ext_cols] = train[ext_cols].fillna(train[ext_cols].mean())
+        self.test[ext_cols] = test[ext_cols].fillna(train[ext_cols].mean())
         for i, j in itertools.combinations(ext_cols, 2):
             self.train[f'{i}_add_{j}'] = self.train[i] + self.train[j]
             self.train[f'{i}_sub_{j}'] = self.train[i] - self.train[j]
             self.train[f'{i}_mul_{j}'] = self.train[i] * self.train[j]
             self.train[f'{i}_div_{j}'] = self.train[i] / (self.train[j] + 0.1)
-            
             self.test[f'{i}_add_{j}'] = self.test[i] + self.test[j]
             self.test[f'{i}_sub_{j}'] = self.test[i] - self.test[j]
             self.test[f'{i}_mul_{j}'] = self.test[i] * self.test[j]
             self.test[f'{i}_div_{j}'] = self.test[i] / (self.test[j] + 0.1)
-        
-        self.train['EXT_SOURCE_mean'] = self.train[ext_cols].mean(axis=1)
-        self.train.fillna(self.train.mean(), inplace=True)
-        self.test['EXT_SOURCE_mean'] = self.test[ext_cols].mean(axis=1)
-        self.test.fillna(self.train.mean(), inplace=True)
+        assert self.train.isnull().sum().sum() + self.test.isnull().sum().sum() == 0
+
+
+class MainExtMean(Feature):
+    def create_features(self):
+        trn = train[ext_cols].fillna(train[ext_cols].mean())
+        tst = test[ext_cols].fillna(train[ext_cols].mean())
+        self.train['EXT_SOURCE_mean'] = trn[ext_cols].mean(axis=1)
+        self.test['EXT_SOURCE_mean'] = tst[ext_cols].mean(axis=1)
+        assert self.train.isnull().sum().sum() + self.test.isnull().sum().sum() == 0
 
 
 # class MainExtNull(Feature):
@@ -179,6 +169,12 @@ class MainAreaIncome(Feature):
             self.test[f'area_{f}_median_diff'] = test[f] - self.test[f'area_{f}_median']
             self.test[f'area_{f}_mean_ratio'] = test[f] / self.test[f'area_{f}_mean']
             self.test[f'area_{f}_median_ratio'] = test[f] / self.test[f'area_{f}_median']
+
+
+class MainRegionAsCategory(Feature):
+    def create_features(self):
+        self.train = train['REGION_POPULATION_RELATIVE'].astype(str).to_frame('region_as_category')
+        self.test = test['REGION_POPULATION_RELATIVE'].astype(str).to_frame('region_as_category')
 
 
 if __name__ == '__main__':

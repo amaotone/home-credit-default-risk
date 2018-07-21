@@ -68,9 +68,10 @@ def run(name, feats, params, fit_params):
     
     valid_score = np.mean(cv_results)
     message = f"""cv: {valid_score:.5f}
-    feats: {feats}
-    model_params: {params}
-    fit_params: {fit_params}"""
+scores: {[round(c, 4) for c in cv_results]}
+feats: {feats}
+model_params: {params}
+fit_params: {fit_params}"""
     send_line_notification(message)
     print('=' * 60)
     print(message)
@@ -86,6 +87,7 @@ def run(name, feats, params, fit_params):
         generate_submit(pred, f'{name}_{valid_score:.5f}', RESULT_DIR)
         
         print('output feature importances')
+        feat_df /= feat_df.mean(axis=0) * 100
         feat_df.mean(axis=1).sort_values(ascending=False).to_csv(RESULT_DIR / 'feats.csv')
         imp = feat_df.mean(axis=1).sort_values(ascending=False)[:50]
         imp[::-1].plot.barh(figsize=(20, 15))
