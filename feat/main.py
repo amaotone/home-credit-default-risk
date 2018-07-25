@@ -20,6 +20,91 @@ Feature.dir = '../working'
 Feature.prefix = 'main'
 
 
+class MainAmount(Feature):
+    def create_features(self):
+        cols = ['AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_GOODS_PRICE', 'AMT_ANNUITY']
+        self.train = train[cols]
+        self.test = test[cols]
+
+
+class MainAmountReq(Feature):
+    def create_features(self):
+        self.train = train.filter(regex='AMT_REQ_')
+        self.test = test.filter(regex='AMT_REQ_')
+
+
+class MainHouse(Feature):
+    def create_features(self):
+        self.train = train.filter(regex='(_AVG|_MEDI|_MODE)$')
+        self.test = test.filter(regex='(_AVG|_MEDI|_MODE)$')
+
+
+class MainGender(Feature):
+    def create_features(self):
+        self.train = train[['CODE_GENDER']].copy()
+        self.test = test[['CODE_GENDER']].copy()
+        print(self.train.dtypes)
+
+
+class MainDays(Feature):
+    def create_features(self):
+        self.train = train.filter(regex='DAYS_')
+        self.test = test.filter(regex='DAYS_')
+
+
+class MainSocial(Feature):
+    def create_features(self):
+        self.train = train.filter(regex='SOCIAL')
+        self.test = test.filter(regex='SOCIAL')
+
+
+class MainExt(Feature):
+    def create_features(self):
+        self.train = train.filter(regex='EXT_SOURCE')
+        self.test = test.filter(regex='EXT_SOURCE')
+
+
+class MainDocument(Feature):
+    def create_features(self):
+        self.train = train.filter(regex='DOCUMENT')
+        self.test = test.filter(regex='DOCUMENT')
+
+
+class MainFlag(Feature):
+    def create_features(self):
+        cols = list(train.filter(regex='FLAG_(?!DOCUMENT)').columns) + \
+               ['LIVE_CITY_NOT_WORK_CITY', 'LIVE_REGION_NOT_WORK_REGION',
+                'REG_CITY_NOT_LIVE_CITY', 'REG_CITY_NOT_WORK_CITY',
+                'REG_REGION_NOT_LIVE_REGION', 'REG_REGION_NOT_WORK_REGION']
+        self.train = train[cols]
+        self.test = test[cols]
+
+
+class MainRegion(Feature):
+    def create_features(self):
+        cols = train.filter(regex='^REGION_').columns
+        self.train = train[cols]
+        self.test = test[cols]
+
+
+class MainCar(Feature):
+    def create_features(self):
+        self.train = train[['OWN_CAR_AGE']]
+        self.test = test[['OWN_CAR_AGE']]
+
+
+class MainApplication(Feature):
+    def create_features(self):
+        self.train = train.filter(regex='APPR')
+        self.test = test.filter(regex='APPR')
+
+
+class MainNullCount(Feature):
+    def create_features(self):
+        for new, df in zip([self.train, self.test], [train, test]):
+            new['null_count'] = df.isnull().sum(axis=1)
+
+
 class MainCategory(Feature):
     def create_features(self):
         self.train = train.filter(regex='(NAME_|_TYPE)')
@@ -36,7 +121,7 @@ class MainDayPairwise(Feature):
             for df, new in zip([train.copy(), test.copy()], [self.train, self.test]):
                 df['OWN_CAR_AGE'] *= -365.25
                 df.loc[df['FLAG_OWN_CAR'] == 0, 'OWN_CAR_AGE'] = 0
-                new[f'{i}_sub_{j}'] = df[i] - df[j]
+                # new[f'{i}_sub_{j}'] = df[i] - df[j]
                 new[f'{i}_div_{j}'] = df[i] / (df[j] + 0.1)
 
 
@@ -51,12 +136,11 @@ class MainAmountPerPerson(Feature):
 class MainAmountPairwise(Feature):
     def create_features(self):
         for i, j in itertools.combinations(amt_cols, 2):
-            sub = f'{i}_sub_{j}'
+            # sub = f'{i}_sub_{j}'
+            # self.train[sub] = train[i] - train[j]
+            # self.test[sub] = test[i] - test[j]
             div = f'{i}_div_{j}'
-            self.train[sub] = train[i] - train[j]
             self.train[div] = train[i] / (train[j] + 0.1)
-            
-            self.test[sub] = test[i] - test[j]
             self.test[div] = test[i] / (test[j] + 0.1)
             
             for d in ['DAYS_BIRTH', 'DAYS_EMPLOYED', 'DAYS_REGISTRATION', 'DAYS_ID_PUBLISH',
@@ -121,7 +205,7 @@ class MainExtMean(Feature):
 #         self.test['EXT_SOURCE_null_cnt'] = test.filter(regex='EXT_').isnull().sum(axis=1)
 
 
-class MainDocument(Feature):
+class MainDocumentCount(Feature):
     prefix = 'main'
     
     def create_features(self):
@@ -147,7 +231,11 @@ class MainFamily(Feature):
             df[f'{i}_per_children'] = X[i] / (X.CNT_CHILDREN + 1)
         df['children_ratio'] = X.CNT_CHILDREN / X.CNT_FAM_MEMBERS
         df['cnt_parent'] = X.CNT_FAM_MEMBERS - X.CNT_CHILDREN
-        self.train, self.test = df[:len(train)], df[len(train):]
+        self.train, self.test = df[:len(train)].copy(), df[len(train):].copy()
+        self.train['CNT_FAM_MEMBERS'] = train['CNT_FAM_MEMBERS']
+        self.train['CNT_CHILDREN'] = train['CNT_CHILDREN']
+        self.test['CNT_FAM_MEMBERS'] = test['CNT_FAM_MEMBERS']
+        self.test['CNT_CHILDREN'] = test['CNT_CHILDREN']
 
 
 class MainAreaIncome(Feature):
@@ -185,14 +273,15 @@ if __name__ == '__main__':
         X = pd.concat([
             train.drop('TARGET', axis=1),
             test
-        ])
+        ])  # type: pd.DataFrame
     
     with timer('preprocessing'):
         train.AMT_INCOME_TOTAL.replace(117000000.0, 1170000, inplace=True)
-        train.replace({'Yes': 1, 'No': 0, 'Y': 1, 'N': 0, 'M': 1, 'F': 0, 'XAP': np.nan, 'XAN': np.nan}, inplace=True)
-        test.replace({'Yes': 1, 'No': 0, 'Y': 1, 'N': 0, 'M': 1, 'F': 0, 'XAP': np.nan, 'XAN': np.nan}, inplace=True)
-        train.filter(regex='DAYS_').replace(365243, np.nan, inplace=True)
-        test.filter(regex='DAYS_').replace(365243, np.nan, inplace=True)
+        train.replace({'Yes': 1, 'No': 0, 'Y': 1, 'N': 0, 'XAP': np.nan, 'XAN': np.nan}, inplace=True)
+        test.replace({'Yes': 1, 'No': 0, 'Y': 1, 'N': 0, 'XAP': np.nan, 'XAN': np.nan}, inplace=True)
+        day_cols = train.filter(regex='DAYS_').columns
+        train[day_cols] = train[day_cols].replace(365243, np.nan)
+        test[day_cols] = test[day_cols].replace(365243, np.nan)
     
     with timer('create dataset'):
         generate_features(globals(), args.force)

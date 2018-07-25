@@ -75,8 +75,11 @@ class SubfileFeature(Feature):
             self.create_features()
             self.train = train_idx.merge(self.df, left_on='SK_ID_CURR', right_index=True, how='left')[self.df.columns]
             self.test = test_idx.merge(self.df, left_on='SK_ID_CURR', right_index=True, how='left')[self.df.columns]
-            self.train.columns = self.prefix + self.train.columns.str.replace('\s+', '_') + self.suffix
-            self.test.columns = self.prefix + self.test.columns.str.replace('\s+', '_') + self.suffix
+
+            prefix = self.prefix + '_' if self.prefix else ''
+            suffix = '_' + self.suffix if self.suffix else ''
+            self.train.columns = prefix + self.train.columns.str.replace('\s+', '_') + suffix
+            self.test.columns = prefix + self.test.columns.str.replace('\s+', '_') + suffix
         return self
 
 # class MainFileFeature(Feature, metaclass=ABCMeta):

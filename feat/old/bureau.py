@@ -146,6 +146,8 @@ class BureauNullCount(SubfileFeature):
         self.df['max'] = df.groupby('SK_ID_CURR').null_count.max()
 
 
+
+
 if __name__ == '__main__':
     args = get_arguments('POS CASH')
     with timer('load dataset'):

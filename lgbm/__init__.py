@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import StratifiedKFold
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import generate_submit, load_dataset, send_line_notification
@@ -20,8 +19,8 @@ sns.set_style('darkgrid')
 
 def run(name, feats, params, fit_params):
     with timer('load datasets'):
-        X_train, y_train, X_test, _ = load_dataset(feats)
-        cv = StratifiedKFold(5, shuffle=True, random_state=71)
+        X_train, y_train, X_test, cv = load_dataset(feats)
+        # cv = StratifiedKFold(5, shuffle=True, random_state=71)
         print('train:', X_train.shape)
         print('test :', X_test.shape)
     
@@ -67,6 +66,7 @@ def run(name, feats, params, fit_params):
             eval_df[i][:len(model.evals_result_['valid_0']['auc'])] = model.evals_result_['valid_0']['auc']
     
     valid_score = np.mean(cv_results)
+    # valid_score = roc_auc_score(y_train, val_series.values)
     message = f"""cv: {valid_score:.5f}
 scores: {[round(c, 4) for c in cv_results]}
 feats: {feats}
@@ -87,7 +87,7 @@ fit_params: {fit_params}"""
         generate_submit(pred, f'{name}_{valid_score:.5f}', RESULT_DIR)
         
         print('output feature importances')
-        feat_df /= feat_df.mean(axis=0) * 100
+        feat_df = (feat_df / feat_df.mean(axis=0))*100
         feat_df.mean(axis=1).sort_values(ascending=False).to_csv(RESULT_DIR / 'feats.csv')
         imp = feat_df.mean(axis=1).sort_values(ascending=False)[:50]
         imp[::-1].plot.barh(figsize=(20, 15))
