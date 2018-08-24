@@ -1,5 +1,6 @@
 import os
 import sys
+from logging import getLogger, StreamHandler, DEBUG
 
 import lightgbm as lgb
 import matplotlib.pyplot as plt
@@ -17,7 +18,18 @@ from utils import timer, timestamp
 sns.set_style('darkgrid')
 
 
-def run(name, feats, params, fit_params):
+def run(name, feats, params, fit_params, fill=-9999):
+    logger = getLogger(name)
+    logger.setLevel(DEBUG)
+    
+    ch = StreamHandler()
+    ch.setLevel(DEBUG)
+    
+    handler = StreamHandler()
+    handler.setLevel(DEBUG)
+    logger.setLevel(DEBUG)
+    logger.addHandler(handler)
+    
     with timer('load datasets'):
         X_train, y_train, X_test, cv = load_dataset(feats)
         # cv = StratifiedKFold(5, shuffle=True, random_state=71)
@@ -25,10 +37,26 @@ def run(name, feats, params, fit_params):
         print('test :', X_test.shape)
     
     with timer('impute missing'):
-        X_train.fillna(-9999, inplace=True)
-        X_test.fillna(-9999, inplace=True)
+        # print('replace {inf, -inf} with nan')
+        # X_train.replace([np.inf, -np.inf], np.nan, inplace=True)
+        # X_test.replace([np.inf, -np.inf], np.nan, inplace=True)
+        
+        if fill == 'mean':
+            assert X_train.mean().isnull().sum() == 0
+            print('fill nan with mean')
+            X_train.fillna(X_train.mean(), inplace=True)
+            X_test.fillna(X_train.mean(), inplace=True)
+        else:
+            print(f'fill nan with {fill}')
+            X_train.fillna(fill, inplace=True)
+            X_test.fillna(fill, inplace=True)
         assert X_train.isnull().sum().sum() == 0
         assert X_test.isnull().sum().sum() == 0
+    
+    if 'colsample_bytree' in params and params['colsample_bytree'] == 'auto':
+        n_samples = X_train.shape[1]
+        params['colsample_bytree'] = np.sqrt(n_samples) / n_samples
+        print(f'set colsample_bytree = {params["colsample_bytree"]}')
     
     with timer('training'):
         cv_results = []
@@ -87,7 +115,7 @@ fit_params: {fit_params}"""
         generate_submit(pred, f'{name}_{valid_score:.5f}', RESULT_DIR)
         
         print('output feature importances')
-        feat_df = (feat_df / feat_df.mean(axis=0))*100
+        feat_df = (feat_df / feat_df.mean(axis=0)) * 100
         feat_df.mean(axis=1).sort_values(ascending=False).to_csv(RESULT_DIR / 'feats.csv')
         imp = feat_df.mean(axis=1).sort_values(ascending=False)[:50]
         imp[::-1].plot.barh(figsize=(20, 15))

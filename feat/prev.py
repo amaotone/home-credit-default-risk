@@ -3,6 +3,8 @@ import sys
 
 import numpy as np
 import pandas as pd
+from scipy.special import erfinv
+from scipy.stats import rankdata
 from sklearn.model_selection import PredefinedSplit
 from tqdm import tqdm
 
@@ -15,6 +17,14 @@ from config import *
 
 Feature.dir = '../working'
 Feature.prefix = 'prev'
+
+
+def gauss_rank(x, fill=np.nan, eps=0.01):
+    mask = x.isnull()
+    x = rankdata(x) - 1
+    x = erfinv(x / x.max() * 2 * (1 - eps) - (1 - eps))
+    x[mask] = fill
+    return x
 
 
 def target_encoding(df, col, fill=None):
@@ -74,6 +84,11 @@ class PrevLastTarget(SubfileFeature):
         self.df = df.filter(regex='(SK_ID_CURR|_target$)').groupby('SK_ID_CURR').mean()
 
 
+class PrevSellerplaceArea(SubfileFeature):
+    def create_features(self):
+        self.df['SELLERPLACE_AREA_mean'] = prev.groupby('SK_ID_CURR').SELLERPLACE_AREA.mean()
+
+
 class PrevSellerplaceAreaTarget(SubfileFeature):
     def create_features(self):
         df = train[['SK_ID_CURR', 'TARGET']].merge(prev[['SK_ID_CURR', 'SELLERPLACE_AREA']], on='SK_ID_CURR',
@@ -114,7 +129,7 @@ class PrevAmount(SubfileFeature):
 class PrevDownpayment(SubfileFeature):
     def create_features(self):
         df = train[['SK_ID_CURR', 'TARGET']].merge(prev, on='SK_ID_CURR', how='right')
-        self.df = df.groupby('SK_ID_CURR').RATE_DOWN_PAYMENT.agg({'mean', 'max'})
+        self.df = df.groupby('SK_ID_CURR')[['RATE_DOWN_PAYMENT']].agg({'mean', 'max'})
         self.df.columns = ['_'.join(f) for f in self.df.columns]
 
 
@@ -122,9 +137,77 @@ class PrevDayChange(SubfileFeature):
     def create_features(self):
         df = prev.copy()
         df['last_due_change'] = df['DAYS_LAST_DUE'] - df['DAYS_LAST_DUE_1ST_VERSION']
-        df['prepayment'] = df['DAYS_TERMINATION'] - df['DAYS_LAST_DUE']
-        self.df = df.groupby('SK_ID_CURR')[['last_due_change', 'prepayment']].agg({'min', 'mean', 'max'})
+        df['termination_to_last_due'] = df['DAYS_TERMINATION'] - df['DAYS_LAST_DUE']
+        df['termination_to_last_due_1st'] = df['DAYS_TERMINATION'] - df['DAYS_LAST_DUE_1ST_VERSION']
+        self.df = df.groupby('SK_ID_CURR')[
+            ['last_due_change', 'termination_to_last_due', 'termination_to_last_due_1st']
+        ].agg({'min', 'mean', 'max'})
         self.df.columns = ['_'.join(f) for f in self.df.columns]
+
+
+class PrevPayed(SubfileFeature):
+    def create_features(self):
+        df = prev.merge(inst.groupby('SK_ID_PREV').AMT_PAYMENT.sum().to_frame(), left_on='SK_ID_PREV',
+                        right_index=True, how='left').query("DAYS_TERMINATION < 0")
+        df['payed_ratio'] = df['AMT_PAYMENT'] / df['AMT_CREDIT']
+        self.df['payed_amount_ratio_mean'] = df.groupby('SK_ID_CURR').payed_ratio.mean()
+
+
+class PrevFutureExpires(SubfileFeature):
+    def create_features(self):
+        ins = inst.groupby('SK_ID_PREV').AMT_PAYMENT.agg(['sum', 'count'])
+        ins.columns = ['AMT_PAYMENT', 'installment_count']
+        df = prev.merge(ins, left_on='SK_ID_PREV', right_index=True, how='left').query("DAYS_TERMINATION > 0")
+        df['payed_count_ratio'] = df['installment_count'] / df['CNT_PAYMENT'].replace(0, np.nan)
+        df['remaining_debt'] = df['AMT_CREDIT'] * df['payed_count_ratio']
+        g = df.groupby('SK_ID_CURR')
+        self.df['remaining_annuity_sum'] = g.AMT_ANNUITY.sum()
+        self.df['remaining_debt_sum'] = g.remaining_debt.sum()
+        self.df['remaining_count_min'] = g.installment_count.min()
+        self.df['remaining_count_mean'] = g.installment_count.mean()
+        self.df['remaining_count_sum'] = g.installment_count.max()
+
+
+class PrevAmountReduced(SubfileFeature):
+    def create_features(self):
+        df = prev.copy()
+        df['amount_reduced'] = prev.AMT_APPLICATION - prev.AMT_CREDIT - prev.AMT_DOWN_PAYMENT
+        self.df = df.groupby('SK_ID_CURR')[['amount_reduced']].agg(['min', 'mean', 'max'])
+        self.df.columns = [f[0] + '_' + f[1] for f in self.df.columns]
+
+
+class PrevApplicationHour(SubfileFeature):
+    def create_features(self):
+        df = prev.copy()
+        t = prev.HOUR_APPR_PROCESS_START.value_counts()
+        ref = t / t.sum()
+        df['HOUR_APPR_PROCESS_START_freq'] = df['HOUR_APPR_PROCESS_START'].replace(ref)
+        self.df = df.groupby('SK_ID_CURR')[['HOUR_APPR_PROCESS_START_freq']].agg(['min', 'mean', 'max'])
+        self.df.columns = [f[0] + '_' + f[1] for f in self.df.columns]
+
+
+class PrevInterest(SubfileFeature):
+    def create_features(self):
+        df = prev.copy()
+        df.fillna(0, inplace=True)
+        df['interest'] = df['RATE_INTEREST_PRIMARY'] * df['RATE_INTEREST_PRIVILEGED']
+        self.df = df.groupby('SK_ID_CURR')[['RATE_INTEREST_PRIMARY', 'RATE_INTEREST_PRIVILEGED', 'interest']].agg([
+            'min', 'mean', 'max'])
+        self.df.columns = [f[0] + '_' + f[1] for f in self.df.columns]
+
+
+class PrevNormalizedAmount(SubfileFeature):
+    def create_features(self):
+        df = prev.query("NAME_CONTRACT_STATUS == 'Approved' and NAME_CONTRACT_TYPE != 'XNA'")
+        loan_types = ['Cash loans', 'Consumer loans', 'Revolving loans']
+        amount_cols = ['AMT_ANNUITY', 'AMT_APPLICATION', 'AMT_CREDIT', 'AMT_DOWN_PAYMENT', 'AMT_GOODS_PRICE']
+        normed_cols = [f + '_norm' for f in amount_cols]
+        for f in amount_cols:
+            for tp in loan_types:
+                idx = df.query("NAME_CONTRACT_TYPE == @tp").index
+                df.loc[idx, f + '_norm'] = gauss_rank(df.loc[idx, f], fill=0)
+        self.df = df.groupby('SK_ID_CURR')[normed_cols].agg(['min', 'mean', 'max'])
+        self.df.columns = [f[0] + '_' + f[1] for f in self.df.columns]
 
 
 if __name__ == '__main__':
@@ -133,6 +216,7 @@ if __name__ == '__main__':
         train = pd.read_feather(TRAIN)
         test = pd.read_feather(TEST)
         prev = pd.read_feather(PREV)
+        inst = pd.read_feather(INST)
         cv_id = pd.read_feather(INPUT / 'cv_id.ftr')
         cv = PredefinedSplit(cv_id)
     

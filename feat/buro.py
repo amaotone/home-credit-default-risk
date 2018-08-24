@@ -101,8 +101,8 @@ class BuroDaysRatio(Feature):
         tst = tst.merge(df, left_on='SK_ID_CURR', right_index=True, how='left')
         for f in day_cols:
             name = f'payment_terms_div_{f}'
-            self.train[name] = trn['payment_terms'] / trn[f]
-            self.test[name] = tst['payment_terms'] / tst[f]
+            self.train[name] = trn['payment_terms'] / trn[f].replace(0, np.nan)
+            self.test[name] = tst['payment_terms'] / tst[f].replace(0, np.nan)
 
 
 class BuroFutureExpires(SubfileFeature):
@@ -115,37 +115,37 @@ class BuroFutureExpires(SubfileFeature):
         self.df['amount_sum'] = g.AMT_CREDIT_SUM.sum()
         self.df['debt_sum'] = g.AMT_CREDIT_SUM_DEBT.sum()
         self.df['annuity_sum'] = g.AMT_ANNUITY.sum()
-        future['rem_installments'] = future['AMT_CREDIT_SUM_DEBT'] / future['AMT_ANNUITY']
+        future['rem_installments'] = future['AMT_CREDIT_SUM_DEBT'] / future['AMT_ANNUITY'].replace(0, np.nan)
         future.loc[future['AMT_ANNUITY'] == 0, 'rem_installments'] = np.nan
         self.df['rem_installments'] = future.groupby('SK_ID_CURR').rem_installments.mean()
 
 
-class BuroPeriodOverlap(SubfileFeature):
-    """めっちゃ時間かかる"""
-    prefix = 'buro_period_overlap'
-    
-    def create_features(self):
-        def count(x):
-            idx = {v: i for i, v in enumerate(np.unique(x[['DAYS_CREDIT', 'DAYS_ENDDATE_FACT']].values))}
-            res = np.zeros(len(idx))
-            for _, s in x.iterrows():
-                res[idx[s.DAYS_CREDIT]] += 1
-                res[idx[s.DAYS_ENDDATE_FACT]] -= 1
-            return res.cumsum().max()
-        
-        def amount_sum(x):
-            idx = {v: i for i, v in enumerate(np.unique(x[['DAYS_CREDIT', 'DAYS_ENDDATE_FACT']].values))}
-            res = np.zeros(len(idx))
-            for _, s in x.iterrows():
-                res[idx[s.DAYS_CREDIT]] += s.AMT_CREDIT_SUM
-                res[idx[s.DAYS_ENDDATE_FACT]] -= s.AMT_CREDIT_SUM
-            return res.cumsum().max()
-        
-        df = buro[['SK_ID_CURR', 'DAYS_CREDIT', 'DAYS_ENDDATE_FACT', 'AMT_CREDIT_SUM']].fillna(0)
-        print('count max')
-        self.df['count_max'] = df.groupby('SK_ID_CURR').apply(count)
-        print('amount sum max')
-        self.df['amount_sum_max'] = df.groupby('SK_ID_CURR').apply(amount_sum)
+# class BuroPeriodOverlap(SubfileFeature):
+#     """めっちゃ時間かかる"""
+#     prefix = 'buro_period_overlap'
+#
+#     def create_features(self):
+#         def count(x):
+#             idx = {v: i for i, v in enumerate(np.unique(x[['DAYS_CREDIT', 'DAYS_ENDDATE_FACT']].values))}
+#             res = np.zeros(len(idx))
+#             for _, s in x.iterrows():
+#                 res[idx[s.DAYS_CREDIT]] += 1
+#                 res[idx[s.DAYS_ENDDATE_FACT]] -= 1
+#             return res.cumsum().max()
+#
+#         def amount_sum(x):
+#             idx = {v: i for i, v in enumerate(np.unique(x[['DAYS_CREDIT', 'DAYS_ENDDATE_FACT']].values))}
+#             res = np.zeros(len(idx))
+#             for _, s in x.iterrows():
+#                 res[idx[s.DAYS_CREDIT]] += s.AMT_CREDIT_SUM
+#                 res[idx[s.DAYS_ENDDATE_FACT]] -= s.AMT_CREDIT_SUM
+#             return res.cumsum().max()
+#
+#         df = buro[['SK_ID_CURR', 'DAYS_CREDIT', 'DAYS_ENDDATE_FACT', 'AMT_CREDIT_SUM']].fillna(0)
+#         print('count max')
+#         self.df['count_max'] = df.groupby('SK_ID_CURR').apply(count)
+#         print('amount sum max')
+#         self.df['amount_sum_max'] = df.groupby('SK_ID_CURR').apply(amount_sum)
 
 
 class BuroProlong(SubfileFeature):

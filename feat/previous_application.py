@@ -103,33 +103,33 @@ class PrevFeature(SubfileFeature):
 #         ], axis=1)
 
 
-class PrevCategoryCount(PrevFeature):
-    def create_features(self):
-        dfs = []
-        for f in tqdm(prev.select_dtypes(['object']).columns):
-            count = prev.groupby('SK_ID_CURR')[f].value_counts().unstack().fillna(0).astype(int)
-            ratio = count.apply(lambda x: x / count.sum(axis=1))
-            count.columns = f + '_' + count.columns + '_count'
-            ratio.columns = f + '_' + ratio.columns + '_ratio'
-            df = pd.concat([count, ratio], axis=1)
-            df.columns = f + '_' + df.columns
-            df[f + '_nunique'] = prev.groupby('SK_ID_CURR')[f].nunique()
-            # df[f + '_latest'] = prev.groupby('SK_ID_CURR')[f].last()
-            dfs.append(df)
-        self.df = pd.concat(dfs, axis=1)
-
-
-class PrevCategoryTfidf(PrevFeature):
-    def create_features(self):
-        dfs = []
-        tfidf_transformer = TfidfTransformer()
-        for f in tqdm(prev.select_dtypes(['object']).columns):
-            count = prev.groupby('SK_ID_CURR')[f].value_counts().unstack().fillna(0).astype(int)
-            df = pd.DataFrame(
-                tfidf_transformer.fit_transform(count).toarray(),
-                index=count.index, columns=[f'{f}_tfidf_{i}' for i in range(count.shape[1])])
-            dfs.append(df)
-        self.df = pd.concat(dfs, axis=1)
+# class PrevCategoryCount(PrevFeature):
+#     def create_features(self):
+#         dfs = []
+#         for f in tqdm(prev.select_dtypes(['object']).columns):
+#             count = prev.groupby('SK_ID_CURR')[f].value_counts().unstack().fillna(0).astype(int)
+#             ratio = count.apply(lambda x: x / count.sum(axis=1))
+#             count.columns = f + '_' + count.columns + '_count'
+#             ratio.columns = f + '_' + ratio.columns + '_ratio'
+#             df = pd.concat([count, ratio], axis=1)
+#             df.columns = f + '_' + df.columns
+#             df[f + '_nunique'] = prev.groupby('SK_ID_CURR')[f].nunique()
+#             # df[f + '_latest'] = prev.groupby('SK_ID_CURR')[f].last()
+#             dfs.append(df)
+#         self.df = pd.concat(dfs, axis=1)
+#
+#
+# class PrevCategoryTfidf(PrevFeature):
+#     def create_features(self):
+#         dfs = []
+#         tfidf_transformer = TfidfTransformer()
+#         for f in tqdm(prev.select_dtypes(['object']).columns):
+#             count = prev.groupby('SK_ID_CURR')[f].value_counts().unstack().fillna(0).astype(int)
+#             df = pd.DataFrame(
+#                 tfidf_transformer.fit_transform(count).toarray(),
+#                 index=count.index, columns=[f'{f}_tfidf_{i}' for i in range(count.shape[1])])
+#             dfs.append(df)
+#         self.df = pd.concat(dfs, axis=1)
 
 
 # class PrevCategoryLda(PrevFeature):
@@ -202,40 +202,40 @@ class PrevBasic(PrevFeature):
 #         ], axis=1)
 
 
-class PrevNullCount(PrevFeature):
-    prefix = 'prev_null_count'
-    
-    def create_features(self):
-        df = prev.copy()
-        df['null_count'] = df.isnull().sum(axis=1)
-        self.df['min'] = df.groupby('SK_ID_CURR').null_count.min()
-        self.df['mean'] = df.groupby('SK_ID_CURR').null_count.mean()
-        self.df['max'] = df.groupby('SK_ID_CURR').null_count.max()
+# class PrevNullCount(PrevFeature):
+#     prefix = 'prev_null_count'
+#
+#     def create_features(self):
+#         df = prev.copy()
+#         df['null_count'] = df.isnull().sum(axis=1)
+#         self.df['min'] = df.groupby('SK_ID_CURR').null_count.min()
+#         self.df['mean'] = df.groupby('SK_ID_CURR').null_count.mean()
+#         self.df['max'] = df.groupby('SK_ID_CURR').null_count.max()
 
 
-class PrevAmountToMain(Feature):
-    prefix = 'prev'
-    
-    def create_features(self):
-        main_cols = ['AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE']
-        prev_cols = ['AMT_ANNUITY', 'AMT_APPLICATION', 'AMT_CREDIT', 'AMT_GOODS_PRICE']
-        g = prev[['SK_ID_CURR'] + prev_cols].groupby('SK_ID_CURR')
-        prev_df = pd.concat([
-            g.max().rename(columns=lambda x: x + '_max'),
-            g.mean().rename(columns=lambda x: x + '_mean')
-        ], axis=1)
-        trn = train.merge(prev_df, left_on='SK_ID_CURR', right_index=True, how='left')
-        tst = test.merge(prev_df, left_on='SK_ID_CURR', right_index=True, how='left')
-        for m, p in itertools.product(main_cols, prev_cols):
-            self.train[f'{m}_sub_{p}_max'] = trn[m] - trn[p + '_max']
-            self.train[f'{m}_sub_{p}_mean'] = trn[m] - trn[p + '_mean']
-            self.test[f'{m}_sub_{p}_max'] = tst[m] - tst[p + '_max']
-            self.test[f'{m}_sub_{p}_mean'] = tst[m] - tst[p + '_mean']
-            
-            self.train[f'{m}_div_{p}_max'] = trn[m] / trn[p + '_max']
-            self.train[f'{m}_div_{p}_mean'] = trn[m] / trn[p + '_mean']
-            self.test[f'{m}_div_{p}_max'] = tst[m] / tst[p + '_max']
-            self.test[f'{m}_div_{p}_mean'] = tst[m] / tst[p + '_mean']
+# class PrevAmountToMain(Feature):
+#     prefix = 'prev'
+#
+#     def create_features(self):
+#         main_cols = ['AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE']
+#         prev_cols = ['AMT_ANNUITY', 'AMT_APPLICATION', 'AMT_CREDIT', 'AMT_GOODS_PRICE']
+#         g = prev[['SK_ID_CURR'] + prev_cols].groupby('SK_ID_CURR')
+#         prev_df = pd.concat([
+#             g.max().rename(columns=lambda x: x + '_max'),
+#             g.mean().rename(columns=lambda x: x + '_mean')
+#         ], axis=1)
+#         trn = train.merge(prev_df, left_on='SK_ID_CURR', right_index=True, how='left')
+#         tst = test.merge(prev_df, left_on='SK_ID_CURR', right_index=True, how='left')
+#         for m, p in itertoolsd.product(main_cols, prev_cols):
+#             self.train[f'{m}_sub_{p}_max'] = trn[m] - trn[p + '_max']
+#             self.train[f'{m}_sub_{p}_mean'] = trn[m] - trn[p + '_mean']
+#             self.test[f'{m}_sub_{p}_max'] = tst[m] - tst[p + '_max']
+#             self.test[f'{m}_sub_{p}_mean'] = tst[m] - tst[p + '_mean']
+#
+#             self.train[f'{m}_div_{p}_max'] = trn[m] / trn[p + '_max']
+#             self.train[f'{m}_div_{p}_mean'] = trn[m] / trn[p + '_mean']
+#             self.test[f'{m}_div_{p}_max'] = tst[m] / tst[p + '_max']
+#             self.test[f'{m}_div_{p}_mean'] = tst[m] / tst[p + '_mean']
 
 
 if __name__ == '__main__':

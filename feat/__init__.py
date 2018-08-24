@@ -64,6 +64,8 @@ def generate_features(features, overwrite):
 
 
 class SubfileFeature(Feature):
+    fill = None
+    
     def __init__(self):
         self.df = pd.DataFrame()
         super().__init__()
@@ -75,7 +77,10 @@ class SubfileFeature(Feature):
             self.create_features()
             self.train = train_idx.merge(self.df, left_on='SK_ID_CURR', right_index=True, how='left')[self.df.columns]
             self.test = test_idx.merge(self.df, left_on='SK_ID_CURR', right_index=True, how='left')[self.df.columns]
-
+            if self.fill:
+                self.train.fillna(self.fill, inplace=True)
+                self.test.fillna(self.fill, inplace=True)
+            
             prefix = self.prefix + '_' if self.prefix else ''
             suffix = '_' + self.suffix if self.suffix else ''
             self.train.columns = prefix + self.train.columns.str.replace('\s+', '_') + suffix
