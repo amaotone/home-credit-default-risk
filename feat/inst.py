@@ -133,6 +133,33 @@ class InstAmountToApplication(Feature):
             self.test[f'{f}_to_application'] = test['AMT_ANNUITY'] / tst[f]
 
 
+class InstPaidByPeriod(SubfileFeature):
+    def create_features(self):
+        inst_ = inst.copy()
+        inst_['days_diff'] = inst_['DAYS_ENTRY_PAYMENT'] - inst_['DAYS_INSTALMENT']
+        inst_['paid_late'] = np.maximum(inst_['days_diff'], 0)
+        inst_['paid_early'] = np.minimum(inst_['days_diff'], 0).abs()
+        df = inst_.groupby('SK_ID_PREV')[['days_diff', 'paid_late', 'paid_early']].mean()
+        df.columns += '_mean'
+        
+        for period in tqdm([3, 5, 10]):
+            df[f'paid_late_in_first_{period}_mean'] = \
+                inst_.groupby('SK_ID_PREV').head(period).groupby('SK_ID_PREV').paid_late.mean()
+            df[f'paid_late_in_last_{period}_mean'] = \
+                inst_.groupby('SK_ID_PREV').tail(period).groupby('SK_ID_PREV').paid_late.mean()
+            df[f'paid_early_in_first_{period}_mean'] = \
+                inst_.groupby('SK_ID_PREV').head(period).groupby('SK_ID_PREV').paid_early.mean()
+            df[f'paid_early_in_last_{period}_mean'] = \
+                inst_.groupby('SK_ID_PREV').tail(period).groupby('SK_ID_PREV').paid_early.mean()
+            df[f'paid_late_in_{period}_mean_diff'] = \
+                df[f'paid_late_in_last_{period}_mean'] - df[f'paid_late_in_first_{period}_mean']
+            df[f'paid_early_in_{period}_mean_diff'] = \
+                df[f'paid_early_in_last_{period}_mean'] - df[f'paid_early_in_first_{period}_mean']
+
+        df = df.merge(inst_[['SK_ID_PREV', 'SK_ID_CURR']].drop_duplicates(), left_index=True, right_on='SK_ID_PREV',
+                      how='left')
+        self.df = df.groupby('SK_ID_CURR').mean()
+
 if __name__ == '__main__':
     args = get_arguments('main')
     with timer('load dataset'):

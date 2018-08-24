@@ -3,6 +3,7 @@ import sys
 
 import pandas as pd
 from sklearn.model_selection import PredefinedSplit
+from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append('../../spica')
@@ -80,6 +81,31 @@ class PosDpdWeighted(SubfileFeature):
         #                        'first_weight_mean': first_weight_mean, 'last_weight_mean': last_weight_mean},
         # }).rename(lambda x: x[0] if x[0] == 'SK_ID_CURR' else x[0] + '_' + x[1])
         # self.df = g.groupby('SK_ID_CURR').agg(['mean', 'max', 'sum']).rename(columns=lambda x: x[0] + '_' + x[1])
+
+
+class PosPaidByPeriod(SubfileFeature):
+    def create_features(self):
+        pos_ = pos.copy()
+        df = pos_.groupby('SK_ID_PREV')[['SK_DPD', 'SK_DPD_DEF']].mean()
+        df.columns += '_mean'
+        
+        for period in tqdm([3, 5, 10]):
+            df[f'SK_DPD_in_first_{period}_mean'] = \
+                pos_.groupby('SK_ID_PREV').head(period).groupby('SK_ID_PREV').SK_DPD.mean()
+            df[f'SK_DPD_in_last_{period}_mean'] = \
+                pos_.groupby('SK_ID_PREV').tail(period).groupby('SK_ID_PREV').SK_DPD.mean()
+            df[f'SK_DPD_DEF_in_first_{period}_mean'] = \
+                pos_.groupby('SK_ID_PREV').head(period).groupby('SK_ID_PREV').SK_DPD_DEF.mean()
+            df[f'SK_DPD_DEF_in_last_{period}_mean'] = \
+                pos_.groupby('SK_ID_PREV').tail(period).groupby('SK_ID_PREV').SK_DPD_DEF.mean()
+            df[f'SK_DPD_in_{period}_mean_diff'] = \
+                df[f'SK_DPD_in_last_{period}_mean'] - df[f'SK_DPD_in_first_{period}_mean']
+            df[f'SK_DPD_DEF_in_{period}_mean_diff'] = \
+                df[f'SK_DPD_DEF_in_last_{period}_mean'] - df[f'SK_DPD_DEF_in_first_{period}_mean']
+        
+        df = df.merge(pos_[['SK_ID_PREV', 'SK_ID_CURR']].drop_duplicates(), left_index=True, right_on='SK_ID_PREV',
+                      how='left')
+        self.df = df.groupby('SK_ID_CURR').mean()
 
 
 if __name__ == '__main__':

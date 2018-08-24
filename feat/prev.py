@@ -210,6 +210,18 @@ class PrevNormalizedAmount(SubfileFeature):
         self.df.columns = [f[0] + '_' + f[1] for f in self.df.columns]
 
 
+class PrevInstallmentCount(SubfileFeature):
+    def create_features(self):
+        df = prev.copy()
+        df['ideal_inst_cnt'] = df['AMT_CREDIT'] / df['AMT_ANNUITY']
+        df = df.merge(inst.groupby('SK_ID_PREV').size().to_frame('act_inst_cnt'),
+                      left_on='SK_ID_CURR', right_index=True, how='left')
+        df['inst_cnt_ratio'] = df['act_inst_cnt'] / df['ideal_inst_cnt']
+        self.df = df.groupby('SK_ID_CURR')['ideal_inst_cnt', 'act_inst_cnt', 'inst_cnt_ratio'].agg(
+            ['min', 'mean', 'max'])
+        self.df.columns = [f[0] + '_' + f[1] for f in self.df.columns]
+
+
 if __name__ == '__main__':
     args = get_arguments('main')
     with timer('load dataset'):
@@ -220,7 +232,8 @@ if __name__ == '__main__':
         cv_id = pd.read_feather(INPUT / 'cv_id.ftr')
         cv = PredefinedSplit(cv_id)
     
-    # with timer('preprocessing'):
+    with timer('preprocessing'):
+        prev = prev.query("NAME_CONTRACT_TYPE != 'XNA'")
     
     with timer('create dataset'):
         generate_features(globals(), args.force)
