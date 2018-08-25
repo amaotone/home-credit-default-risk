@@ -30,17 +30,14 @@ def run(name, feats, params, fit_params, fill=-9999):
     logger.setLevel(DEBUG)
     logger.addHandler(handler)
     
+    train = pd.read_feather(str(TRAIN))
+    
     with timer('load datasets'):
         X_train, y_train, X_test, cv = load_dataset(feats)
-        # cv = StratifiedKFold(5, shuffle=True, random_state=71)
         print('train:', X_train.shape)
         print('test :', X_test.shape)
     
     with timer('impute missing'):
-        # print('replace {inf, -inf} with nan')
-        # X_train.replace([np.inf, -np.inf], np.nan, inplace=True)
-        # X_test.replace([np.inf, -np.inf], np.nan, inplace=True)
-        
         if fill == 'mean':
             assert X_train.mean().isnull().sum() == 0
             print('fill nan with mean')
@@ -60,10 +57,8 @@ def run(name, feats, params, fit_params, fill=-9999):
     
     with timer('training'):
         cv_results = []
-        val_series = y_train.copy()
+        cv_df = pd.DataFrame(index=range(len(y_train)), columns=range(cv.get_n_splits()))
         test_df = pd.DataFrame()
-        eval_df = pd.DataFrame(np.zeros((params['n_estimators'], cv.get_n_splits())),
-                               columns=range(cv.get_n_splits()))
         feat_df = None
         for i, (trn_idx, val_idx) in enumerate(cv.split(X_train, y_train)):
             X_trn = X_train.iloc[trn_idx].copy()
@@ -85,38 +80,41 @@ def run(name, feats, params, fit_params, fill=-9999):
                 model.fit(X_trn, y_trn, eval_set=[(X_val, y_val)], **fit_params)
             
             p = model.predict_proba(X_val)[:, 1]
-            val_series.iloc[val_idx] = p
+            cv_df.loc[val_idx, i] = p
             cv_results.append(roc_auc_score(y_val, p))
             test_df[i] = model.predict_proba(X_tst)[:, 1]
             if feat_df is None:
                 feat_df = pd.DataFrame(index=X_trn.columns)
             feat_df[i] = model.feature_importances_
-            eval_df[i][:len(model.evals_result_['valid_0']['auc'])] = model.evals_result_['valid_0']['auc']
     
     valid_score = np.mean(cv_results)
-    # valid_score = roc_auc_score(y_train, val_series.values)
     message = f"""cv: {valid_score:.5f}
 scores: {[round(c, 4) for c in cv_results]}
 feats: {feats}
 model_params: {params}
 fit_params: {fit_params}"""
+    
     send_line_notification(message)
-    print('=' * 60)
-    print(message)
-    print('=' * 60)
     
     with timer('output results'):
         RESULT_DIR = OUTPUT / (timestamp() + '_' + name)
         RESULT_DIR.mkdir()
         
-        pd.DataFrame({'TARGET': y_train, 'p': val_series}).to_csv(RESULT_DIR / f'{name}_cv_pred.csv', index=False)
+        # output cv prediction
+        tmp = pd.DataFrame({'SK_ID_CURR': train['SK_ID_CURR'], 'TARGET': cv_df.mean(axis=1)})
+        tmp.to_csv(RESULT_DIR / f'{name}_cv.csv', index=None)
         
+        # output test prediction
         pred = test_df.mean(axis=1).ravel()
-        generate_submit(pred, f'{name}_{valid_score:.5f}', RESULT_DIR)
+        generate_submit(pred, f'{name}_{valid_score:.5f}', RESULT_DIR, compression=False)
         
-        print('output feature importances')
+        # output feature importances
         feat_df = (feat_df / feat_df.mean(axis=0)) * 100
         feat_df.mean(axis=1).sort_values(ascending=False).to_csv(RESULT_DIR / 'feats.csv')
         imp = feat_df.mean(axis=1).sort_values(ascending=False)[:50]
         imp[::-1].plot.barh(figsize=(20, 15))
         plt.savefig(str(RESULT_DIR / 'feature_importances.pdf'), bbox_inches='tight')
+        
+        print('=' * 60)
+        print(message)
+        print('=' * 60)

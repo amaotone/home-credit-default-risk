@@ -59,14 +59,17 @@ def timer(name):
     print(f'[{name}] done in {time.time() - t0:.0f} s')
 
 
-def generate_submit(p, name, dir=None):
+def generate_submit(p, name, dir=None, compression=True):
     print('load sample submit')
     sub = pd.read_feather(INPUT / 'sample_submission.ftr')
     sub.TARGET = p
     dir = dir or OUTPUT
-    filename = dir / f"{name}.csv.gz"
+    filename = dir / f"{name}.csv.gz" if compression else dir / f"{name}.csv"
     print(f'output {filename}')
-    sub.to_csv(filename, index=None, compression='gzip')
+    if compression:
+        sub.to_csv(filename, index=None, compression='gzip')
+    else:
+        sub.to_csv(filename, index=None)
 
 
 def timestamp():
