@@ -139,26 +139,26 @@ class InstPaidByPeriod(SubfileFeature):
         inst_['days_diff'] = inst_['DAYS_ENTRY_PAYMENT'] - inst_['DAYS_INSTALMENT']
         inst_['paid_late'] = np.maximum(inst_['days_diff'], 0)
         inst_['paid_early'] = np.minimum(inst_['days_diff'], 0).abs()
-        df = inst_.groupby('SK_ID_PREV')[['days_diff', 'paid_late', 'paid_early']].mean()
-        df.columns += '_mean'
-        
+        dfs = []
+        df = inst_.groupby('SK_ID_PREV')[['days_diff', 'paid_late', 'paid_early']].agg(['mean', np.count_nonzero])
+        df.columns = [f[0] + '_' + f[1] for f in df.columns]
+        dfs.append(df)
         for period in tqdm([3, 5, 10]):
-            df[f'paid_late_in_first_{period}_mean'] = \
-                inst_.groupby('SK_ID_PREV').head(period).groupby('SK_ID_PREV').paid_late.mean()
-            df[f'paid_late_in_last_{period}_mean'] = \
-                inst_.groupby('SK_ID_PREV').tail(period).groupby('SK_ID_PREV').paid_late.mean()
-            df[f'paid_early_in_first_{period}_mean'] = \
-                inst_.groupby('SK_ID_PREV').head(period).groupby('SK_ID_PREV').paid_early.mean()
-            df[f'paid_early_in_last_{period}_mean'] = \
-                inst_.groupby('SK_ID_PREV').tail(period).groupby('SK_ID_PREV').paid_early.mean()
-            df[f'paid_late_in_{period}_mean_diff'] = \
-                df[f'paid_late_in_last_{period}_mean'] - df[f'paid_late_in_first_{period}_mean']
-            df[f'paid_early_in_{period}_mean_diff'] = \
-                df[f'paid_early_in_last_{period}_mean'] - df[f'paid_early_in_first_{period}_mean']
-
+            df = inst_.groupby('SK_ID_PREV').head(period).groupby('SK_ID_PREV')[['paid_late', 'paid_early']].agg([
+                'mean', np.count_nonzero])
+            df.columns = df.columns = [f'first_{period}_{f[0]}_{f[1]}' for f in df.columns]
+            dfs.append(df)
+            
+            df = inst_.groupby('SK_ID_PREV').tail(period).groupby('SK_ID_PREV')[['paid_late', 'paid_early']].agg([
+                'mean', np.count_nonzero])
+            df.columns = df.columns = [f'last_{period}_{f[0]}_{f[1]}' for f in df.columns]
+            dfs.append(df)
+        
+        df = pd.concat(dfs, axis=1)  # type: pd.DataFrame
         df = df.merge(inst_[['SK_ID_PREV', 'SK_ID_CURR']].drop_duplicates(), left_index=True, right_on='SK_ID_PREV',
                       how='left')
         self.df = df.groupby('SK_ID_CURR').mean()
+
 
 if __name__ == '__main__':
     args = get_arguments('main')

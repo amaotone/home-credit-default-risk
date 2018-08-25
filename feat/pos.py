@@ -1,6 +1,7 @@
 import os
 import sys
 
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import PredefinedSplit
 from tqdm import tqdm
@@ -86,23 +87,23 @@ class PosDpdWeighted(SubfileFeature):
 class PosPaidByPeriod(SubfileFeature):
     def create_features(self):
         pos_ = pos.copy()
-        df = pos_.groupby('SK_ID_PREV')[['SK_DPD', 'SK_DPD_DEF']].mean()
-        df.columns += '_mean'
         
+        dfs = []
+        df = pos_.groupby('SK_ID_PREV')[['SK_DPD', 'SK_DPD_DEF']].agg(['mean', np.count_nonzero])
+        df.columns = [f[0] + '_' + f[1] for f in df.columns]
+        dfs.append(df)
         for period in tqdm([3, 5, 10]):
-            df[f'SK_DPD_in_first_{period}_mean'] = \
-                pos_.groupby('SK_ID_PREV').head(period).groupby('SK_ID_PREV').SK_DPD.mean()
-            df[f'SK_DPD_in_last_{period}_mean'] = \
-                pos_.groupby('SK_ID_PREV').tail(period).groupby('SK_ID_PREV').SK_DPD.mean()
-            df[f'SK_DPD_DEF_in_first_{period}_mean'] = \
-                pos_.groupby('SK_ID_PREV').head(period).groupby('SK_ID_PREV').SK_DPD_DEF.mean()
-            df[f'SK_DPD_DEF_in_last_{period}_mean'] = \
-                pos_.groupby('SK_ID_PREV').tail(period).groupby('SK_ID_PREV').SK_DPD_DEF.mean()
-            df[f'SK_DPD_in_{period}_mean_diff'] = \
-                df[f'SK_DPD_in_last_{period}_mean'] - df[f'SK_DPD_in_first_{period}_mean']
-            df[f'SK_DPD_DEF_in_{period}_mean_diff'] = \
-                df[f'SK_DPD_DEF_in_last_{period}_mean'] - df[f'SK_DPD_DEF_in_first_{period}_mean']
+            df = pos_.groupby('SK_ID_PREV').head(period).groupby('SK_ID_PREV')[['SK_DPD', 'SK_DPD_DEF']].agg([
+                'mean', np.count_nonzero])
+            df.columns = df.columns = [f'first_{period}_{f[0]}_{f[1]}' for f in df.columns]
+            dfs.append(df)
+            
+            df = pos_.groupby('SK_ID_PREV').tail(period).groupby('SK_ID_PREV')[['SK_DPD', 'SK_DPD_DEF']].agg([
+                'mean', np.count_nonzero])
+            df.columns = df.columns = [f'last_{period}_{f[0]}_{f[1]}' for f in df.columns]
+            dfs.append(df)
         
+        df = pd.concat(dfs, axis=1)  # type: pd.DataFrame
         df = df.merge(pos_[['SK_ID_PREV', 'SK_ID_CURR']].drop_duplicates(), left_index=True, right_on='SK_ID_PREV',
                       how='left')
         self.df = df.groupby('SK_ID_CURR').mean()

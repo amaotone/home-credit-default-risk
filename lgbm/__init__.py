@@ -37,6 +37,24 @@ def run(name, feats, params, fit_params, fill=-9999):
         print('train:', X_train.shape)
         print('test :', X_test.shape)
     
+    with timer('clean datasets'):
+        # drop id cols
+        id_cols = X_train.filter(regex='(SK_ID_CURR|SK_ID_PREV)').columns
+        print('drop id:', id_cols.tolist())
+        X_train.drop(id_cols, axis=1, inplace=True)
+        X_test.drop(id_cols, axis=1, inplace=True)
+        
+        # drop columns which contains many NaN
+        ref_train = X_train.isnull().mean() > 0.95
+        ref_test = X_test.isnull().mean() > 0.95
+        nan_cols = X_train.columns[ref_train | ref_test]
+        print('drop many nan:', nan_cols.tolist())
+        X_train.drop(nan_cols, axis=1, inplace=True)
+        X_test.drop(nan_cols, axis=1, inplace=True)
+
+        print('train:', X_train.shape)
+        print('test :', X_test.shape)
+
     with timer('impute missing'):
         if fill == 'mean':
             assert X_train.mean().isnull().sum() == 0

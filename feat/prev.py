@@ -215,9 +215,9 @@ class PrevInstallmentCount(SubfileFeature):
         df = prev.copy()
         df['ideal_inst_cnt'] = df['AMT_CREDIT'] / df['AMT_ANNUITY']
         df = df.merge(inst.groupby('SK_ID_PREV').size().to_frame('act_inst_cnt'),
-                      left_on='SK_ID_CURR', right_index=True, how='left')
+                      left_on='SK_ID_PREV', right_index=True, how='left')
         df['inst_cnt_ratio'] = df['act_inst_cnt'] / df['ideal_inst_cnt']
-        self.df = df.groupby('SK_ID_CURR')['ideal_inst_cnt', 'act_inst_cnt', 'inst_cnt_ratio'].agg(
+        self.df = df.groupby('SK_ID_CURR')[['ideal_inst_cnt', 'act_inst_cnt', 'inst_cnt_ratio']].agg(
             ['min', 'mean', 'max'])
         self.df.columns = [f[0] + '_' + f[1] for f in self.df.columns]
 
