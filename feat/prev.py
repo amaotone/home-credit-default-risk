@@ -40,6 +40,35 @@ def target_encoding(df, col, fill=None):
     return res.mean(axis=1)
 
 
+def time_weighted_average(df, data_cols, suffix='_time_weighted'):
+    data_cols = data_cols if type(data_cols) in (pd.Index, list) else [data_cols]
+    
+    def wm(df, data_col, weight_col, by_col):
+        df['_data_times_weight'] = df[data_col] * df[weight_col]
+        df['_weight_where_notnull'] = df[weight_col] * pd.notnull(df[data_col])
+        g = df.groupby(by_col)
+        res = g['_data_times_weight'].sum() / g['_weight_where_notnull'].sum()
+        del df['_data_times_weight'], df['_weight_where_notnull']
+        return res
+    
+    df_ = df.set_index('SK_ID_PREV')
+    df_['_weight'] = 1 + np.maximum(prev.set_index('SK_ID_PREV').DAYS_DECISION, -1500) / 2000
+    res = []
+    for f in tqdm(data_cols):
+        res.append(wm(df_, f, '_weight', 'SK_ID_CURR'))
+    res = pd.concat(res, axis=1)
+    res.columns = [f + suffix for f in data_cols]
+    return res
+
+
+class PrevTimeWeighted(SubfileFeature):
+    def create_features(self):
+        df = prev.copy()
+        cols = df.select_dtypes(exclude=['object']).columns.tolist()
+        cols = [f for f in cols if f not in ('SK_ID_CURR', 'SK_ID_PREV')]
+        self.df = time_weighted_average(df, cols)
+
+
 class PrevCount(SubfileFeature):
     def create_features(self):
         self.df['count'] = prev.groupby('SK_ID_CURR').size()
@@ -50,6 +79,7 @@ class PrevNullCount(SubfileFeature):
         df = prev.copy()
         df['null_count'] = df.isnull().sum(axis=1)
         self.df['null_count'] = df.groupby('SK_ID_CURR').null_count.mean()
+        self.df = pd.concat([self.df, time_weighted_average(df, 'null_count')], axis=1)
 
 
 class PrevTarget(SubfileFeature):
@@ -59,7 +89,9 @@ class PrevTarget(SubfileFeature):
         df[cols] = df[cols].replace({'XNA': np.nan, 'XAP': np.nan})
         for f in cols:
             df[f'{f}_target'] = target_encoding(df, f)
-        self.df = df.filter(regex='(SK_ID_CURR|_target$)').groupby('SK_ID_CURR').mean()
+        cols = df.filter(regex='_target$').columns.tolist()
+        self.df = df.groupby('SK_ID_CURR')[cols].mean()
+        self.df = pd.concat([self.df, time_weighted_average(df, cols)], axis=1)
 
 
 class PrevFirstTarget(SubfileFeature):
@@ -70,7 +102,9 @@ class PrevFirstTarget(SubfileFeature):
         df[cols] = df[cols].replace({'XNA': np.nan, 'XAP': np.nan})
         for f in cols:
             df[f'{f}_first_target'] = target_encoding(df, f)
-        self.df = df.filter(regex='(SK_ID_CURR|_target$)').groupby('SK_ID_CURR').mean()
+        cols = df.filter(regex='_target$').columns.tolist()
+        self.df = df.groupby('SK_ID_CURR')[cols].mean()
+        self.df = pd.concat([self.df, time_weighted_average(df, cols)], axis=1)
 
 
 class PrevLastTarget(SubfileFeature):
@@ -81,21 +115,24 @@ class PrevLastTarget(SubfileFeature):
         df[cols] = df[cols].replace({'XNA': np.nan, 'XAP': np.nan})
         for f in cols:
             df[f'{f}_last_target'] = target_encoding(df, f)
-        self.df = df.filter(regex='(SK_ID_CURR|_target$)').groupby('SK_ID_CURR').mean()
+        cols = df.filter(regex='_target$').columns.tolist()
+        self.df = df.groupby('SK_ID_CURR')[cols].mean()
+        self.df = pd.concat([self.df, time_weighted_average(df, cols)], axis=1)
 
 
 class PrevSellerplaceArea(SubfileFeature):
     def create_features(self):
         self.df['SELLERPLACE_AREA_mean'] = prev.groupby('SK_ID_CURR').SELLERPLACE_AREA.mean()
+        self.df = pd.concat([self.df, time_weighted_average(prev, 'SELLERPLACE_AREA')], axis=1)
 
 
 class PrevSellerplaceAreaTarget(SubfileFeature):
     def create_features(self):
-        df = train[['SK_ID_CURR', 'TARGET']].merge(prev[['SK_ID_CURR', 'SELLERPLACE_AREA']], on='SK_ID_CURR',
-                                                   how='right')
+        df = train[['SK_ID_CURR', 'TARGET']].merge(prev, on='SK_ID_CURR', how='right')
         df['bin'] = pd.qcut(df.SELLERPLACE_AREA.replace(-1, np.nan), q=10, labels=False, retbins=False)
         df['SELLERPLACE_AREA_target'] = target_encoding(df, 'bin')
         self.df = df.groupby('SK_ID_CURR').SELLERPLACE_AREA_target.mean().to_frame()
+        self.df = pd.concat([self.df, time_weighted_average(df, 'SELLERPLACE_AREA_target')], axis=1)
 
 
 class PrevAmountChange(SubfileFeature):
@@ -143,6 +180,8 @@ class PrevDayChange(SubfileFeature):
             ['last_due_change', 'termination_to_last_due', 'termination_to_last_due_1st']
         ].agg({'min', 'mean', 'max'})
         self.df.columns = ['_'.join(f) for f in self.df.columns]
+        self.df = pd.concat([self.df, time_weighted_average(df, ['last_due_change', 'termination_to_last_due',
+                                                                 'termination_to_last_due_1st'])], axis=1)
 
 
 class PrevPayed(SubfileFeature):
@@ -208,6 +247,7 @@ class PrevNormalizedAmount(SubfileFeature):
                 df.loc[idx, f + '_norm'] = gauss_rank(df.loc[idx, f], fill=0)
         self.df = df.groupby('SK_ID_CURR')[normed_cols].agg(['min', 'mean', 'max'])
         self.df.columns = [f[0] + '_' + f[1] for f in self.df.columns]
+        self.df = pd.concat([self.df, time_weighted_average(df, normed_cols)], axis=1)
 
 
 class PrevInstallmentCount(SubfileFeature):
@@ -220,6 +260,8 @@ class PrevInstallmentCount(SubfileFeature):
         self.df = df.groupby('SK_ID_CURR')[['ideal_inst_cnt', 'act_inst_cnt', 'inst_cnt_ratio']].agg(
             ['min', 'mean', 'max'])
         self.df.columns = [f[0] + '_' + f[1] for f in self.df.columns]
+        self.df = pd.concat([self.df, time_weighted_average(df, ['ideal_inst_cnt', 'act_inst_cnt', 'inst_cnt_ratio'])],
+                            axis=1)
 
 
 if __name__ == '__main__':
