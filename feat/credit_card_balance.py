@@ -1,3 +1,4 @@
+import itertools
 import os
 import sys
 
@@ -103,6 +104,9 @@ class CreditFirstDelayIndex(SubfileFeature):
             g.mean().rename(columns=lambda x: x + '_mean'),
             g.max().rename(columns=lambda x: x + '_max'),
         ], axis=1)
+
+
+
 
 
 if __name__ == '__main__':

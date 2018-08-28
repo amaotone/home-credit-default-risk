@@ -80,6 +80,7 @@ feats = [
     'pos_paid_by_period',
     'sub_active_credit',
     'sub_active_annuity',
+    'credit_agg_by_limit',
     
     'bureau',
     'pos',
