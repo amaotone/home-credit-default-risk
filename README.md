@@ -11,9 +11,3 @@ convert to feather format
 $ cd scripts
 $ python convert_to_feather.py
 ```
-
-generate features
-
-```bash
-$ python feat/all_feats.py
-```
